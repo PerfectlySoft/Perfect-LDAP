@@ -61,7 +61,7 @@ class PerfectLDAPTests: XCTestCase {
           XCTFail("search return nil")
           return
         }//end guard
-        print(r)
+        print(r.dictionary)
         ser.fulfill()
       }//end search
 
@@ -75,12 +75,12 @@ class PerfectLDAPTests: XCTestCase {
   func testSearchSync () {
     do {
       let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD)
-      guard let rs = try ldap.search(base:"cn=users,dc=p,dc=com",scope:.SUBTREE, attributes: ["cn", "company", "displayName"]) else {
+      guard let rs = try ldap.search(base:"cn=users,dc=p,dc=com",filter: "(initials=RW)", scope:.SUBTREE, attributes: ["cn", "company", "displayName", "initials"]) else {
         XCTFail("search failed")
         return
       }//end guard
       print("-------------------------------------------------------")
-      print(rs)
+      print(rs.dictionary)
       print("-------------------------------------------------------")
     }catch(let err) {
       XCTFail("error: \(err)")

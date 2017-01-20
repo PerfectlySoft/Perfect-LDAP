@@ -329,6 +329,23 @@ public class LDAP {
     /// attribute set as an array, read only
     public var attributeSet: [AttributeSet] { get { return _attr } }
 
+    /// as an dictionary, read only
+    public var dictionary:[String:[String:Any]] { get {
+      var dic:[String:[String:Any]] = [:]
+      for aset in _attr {
+        var d: [String: Any] = [:]
+        for a in aset.attributes {
+          if a.values.count > 1 {
+            d[a.name] = a.values
+          }else {
+            d[a.name] = a.values[0]
+          }//end if
+        }//next a
+        dic[aset.name] = d
+      }//next aset
+      return dic
+    } } //end simple
+
     /// references as an array
     internal var _ref = [Reference]()
 
