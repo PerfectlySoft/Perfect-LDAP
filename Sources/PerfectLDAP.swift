@@ -49,6 +49,27 @@ public class LDAP {
     case message(String)
   }//end enum
 
+  public static func withCArrayOfString(array: [String] = [], operation: (UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>?) -> Void) {
+
+    if array.isEmpty {
+      operation(nil)
+      return
+    }//end if
+
+    // duplicate the array and append a null string
+    var attr: [String?] = array
+    attr.append(nil)
+
+    // duplicate again and turn it into an array of pointers
+    var parr = attr.map { $0 == nil ? nil : strdup($0!) }
+
+    // perform the operation
+    parr.withUnsafeMutableBufferPointer { operation($0.baseAddress) }
+
+    // release allocated string pointers.
+    for p in parr { free(UnsafeMutablePointer(mutating: p)) }
+  }//end withCArrayOfString
+
   /// Explain the error code, typical usage is `throw Exception.message(LDAP.error(error_number))`
   /// - parameters:
   ///   - errno: Int32, the error number return by most ldap_XXX functions
@@ -395,31 +416,26 @@ public class LDAP {
     // prepare the return set
     var msg = OpaquePointer(bitPattern: 0)
 
+    // prepare the return value
     var r = Int32(0)
 
-    // pass nil attribute to get all attributes
-    if attributes.isEmpty {
-      r = ldap_search_ext_s(self.ldap, base, scope.rawValue, filter, nil, 0, nil, nil, nil, 0, &msg)
-    }else {
+    LDAP.withCArrayOfString(array: attributes) { pAttribute in
 
-      // duplicate the attributes and append a null string
-      var attr: [String?] = attributes
-      attr.append(nil)
+      // perform the search
+      r = ldap_search_ext_s(self.ldap, base, scope.rawValue, filter, pAttribute, 0, nil, nil, nil, 0, &msg)
+    }//end
 
-      // duplicate again and turn it into an array of pointers
-      var parr = attr.map { $0 == nil ? nil : strdup($0!) }
-
-      // perform the searching
-      parr.withUnsafeMutableBufferPointer { r = ldap_search_ext_s(self.ldap, base, scope.rawValue, filter, $0.baseAddress, 0, nil, nil, nil, 0, &msg) }
-
-      // release allocated string pointers.
-      for p in parr { free(UnsafeMutablePointer(mutating: p)) }
-    }//end if
+    // validate the query
     guard r == 0 && msg != nil else {
       throw Exception.message(LDAP.error(r))
     }//next
+
+    // process the result set
     let rs = ResultSet(ldap: ldap!, chain: msg!)
+
+    // release the memory
     ldap_msgfree(msg)
+
     return rs
   }//end search
 
