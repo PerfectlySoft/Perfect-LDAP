@@ -373,9 +373,31 @@ public class LDAP {
   /// - throws:
   ///   Exception.message
   @discardableResult
-  public func search(base:String = "", filter:String = "(objectclass=*)", scope:Scope = .BASE) throws -> ResultSet? {
+  public func search(base:String = "", filter:String = "(objectclass=*)", scope:Scope = .BASE, attributes: [String] = []) throws -> ResultSet? {
+
+    // prepare the return set
     var msg = OpaquePointer(bitPattern: 0)
-    let r = ldap_search_ext_s(self.ldap, base, scope.rawValue, filter, nil, 0, nil, nil, nil, 0, &msg)
+
+    var r = Int32(0)
+
+    // pass nil attribute to get all attributes
+    if attributes.isEmpty {
+      r = ldap_search_ext_s(self.ldap, base, scope.rawValue, filter, nil, 0, nil, nil, nil, 0, &msg)
+    }else {
+
+      // duplicate the attributes and append a null string
+      var attr: [String?] = attributes
+      attr.append(nil)
+
+      // duplicate again and turn it into an array of pointers
+      var parr = attr.map { $0 == nil ? nil : strdup($0) }
+
+      // perform the searching
+      parr.withUnsafeMutableBufferPointer { r = ldap_search_ext_s(self.ldap, base, scope.rawValue, filter, $0.baseAddress, 0, nil, nil, nil, 0, &msg) }
+
+      // release allocated string pointers.
+      for p in parr { free(UnsafeMutablePointer(mutating: p)) }
+    }//end if
     guard r == 0 && msg != nil else {
       throw Exception.message(LDAP.error(r))
     }//next

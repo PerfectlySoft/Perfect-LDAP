@@ -75,7 +75,7 @@ class PerfectLDAPTests: XCTestCase {
   func testSearchSync () {
     do {
       let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD)
-      guard let rs = try ldap.search(base:"cn=users,dc=p,dc=com",scope:.SUBTREE) else {
+      guard let rs = try ldap.search(base:"cn=users,dc=p,dc=com",scope:.SUBTREE, attributes: ["cn", "company", "displayName"]) else {
         XCTFail("search failed")
         return
       }//end guard
