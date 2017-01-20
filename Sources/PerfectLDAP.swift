@@ -407,7 +407,7 @@ public class LDAP {
       attr.append(nil)
 
       // duplicate again and turn it into an array of pointers
-      var parr = attr.map { $0 == nil ? nil : strdup($0) }
+      var parr = attr.map { $0 == nil ? nil : strdup($0!) }
 
       // perform the searching
       parr.withUnsafeMutableBufferPointer { r = ldap_search_ext_s(self.ldap, base, scope.rawValue, filter, $0.baseAddress, 0, nil, nil, nil, 0, &msg) }
