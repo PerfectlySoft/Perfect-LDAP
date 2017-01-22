@@ -23,6 +23,9 @@ import OpenLDAP
 /// Threading Library
 import PerfectThread
 
+/// Iconv
+import PerfectICONV
+
 /// Perfect LDAP Module
 public class LDAP {
 
@@ -109,6 +112,31 @@ public class LDAP {
   /// LDAP handler pointer
   internal var ldap: OpaquePointer? = nil
 
+  /// codepage convertor
+  internal var iconv: Iconv? = nil
+
+  /// convert string if encoding is required
+  /// - parameters:
+  ///   - ber: struct berval of the original buffer
+  /// - returns:
+  ///   encoded string
+  public func string(ber: berval) -> String {
+    guard let i = iconv else {
+      return String(validatingUTF8: ber.bv_val) ?? ""
+    }//end i
+    return i.convert(from: ber)
+  }//end string
+
+  /// convert string if encoding is required
+  /// - parameters:
+  ///   - pstr: pointer of the original buffer, will apply null-terminated method
+  /// - returns:
+  ///   encoded string
+  public func string(pstr: UnsafeMutablePointer<Int8>) -> String {
+    let ber = berval(bv_len: strlen(pstr), bv_val: pstr)
+    return self.string(ber: ber)
+  }//end ber
+
   /// constructor of LDAP. could be a simple LDAP() to local server or LDAP(url) with / without logon options.
   /// if login parameters were input, the process would block until finished.
   /// so it is strongly recommanded that call LDAP() without login option and call ldap.login() {} in async mode
@@ -117,9 +145,18 @@ public class LDAP {
   ///   - username: String, user name to login, optional.
   ///   - password: String, password for login, optional.
   ///   - auth: AuthType, such as SIMPLE, GSSAPI, SPNEGO or DIGEST MD5
+  ///   - codePage: object server coding page, e.g., GB2312, BIG5 or JS
   /// - throws:
   ///   possible exceptions of initial failed or access denied
-  public init(url:String = "ldap://localhost", username: String? = nil, password: String? = nil, auth: AuthType = .SIMPLE) throws {
+  public init(url:String = "ldap://localhost", username: String? = nil, password: String? = nil, auth: AuthType = .SIMPLE, codePage: Iconv.CodePage = .UTF8) throws {
+
+    if codePage != .UTF8 {
+      do {
+        iconv = try Iconv(from: codePage, to: .UTF8)
+      }catch {
+
+      }///end try
+    }//end if
 
     ldap = OpaquePointer(bitPattern: 0)
     let r = ldap_initialize(&ldap, url)
@@ -192,16 +229,16 @@ public class LDAP {
     ///   - ldap: the LDAP handler
     ///   - entry: the LDAPMessage (single element)
     ///   - tag: attribute name returned by ldap_xxx_attribute
-    public init (ldap: OpaquePointer, entry:OpaquePointer, tag:UnsafePointer<Int8>) {
+    public init (ldap: LDAP, entry:OpaquePointer, tag:UnsafePointer<Int8>) {
       _name = String(cString: tag)
-      let valueSet = ldap_get_values_len(ldap, entry, tag)
+      let valueSet = ldap_get_values_len(ldap.ldap, entry, tag)
       var cursor = valueSet
       while(cursor != nil) {
         guard let pBer = cursor?.pointee else {
           break
         }//end guard
         let b = pBer.pointee
-        _values.append(String(cString: b.bv_val))
+        _values.append(ldap.string(ber: b))
         cursor = cursor?.successor()
       }//end cursor
       if valueSet != nil {
@@ -229,18 +266,18 @@ public class LDAP {
     /// - parameters:
     ///   - ldap: the LDAP handler
     ///   - entry: the LDAPMessage (single element)
-    public init (ldap: OpaquePointer, entry:OpaquePointer) {
-      guard let pName = ldap_get_dn(ldap, entry) else {
+    public init (ldap: LDAP, entry:OpaquePointer) {
+      guard let pName = ldap_get_dn(ldap.ldap, entry) else {
         return
       }//end pName
-      _name = String(cString: pName)
+      _name = ldap.string(pstr: pName)
       ldap_memfree(pName)
       var ber = OpaquePointer(bitPattern: 0)
-      var a = ldap_first_attribute(ldap, entry, &ber)
+      var a = ldap_first_attribute(ldap.ldap, entry, &ber)
       while(a != nil) {
         _attributes.append(Attribute(ldap: ldap, entry: entry, tag: a!))
         ldap_memfree(a)
-        a = ldap_next_attribute(ldap, entry, ber)
+        a = ldap_next_attribute(ldap.ldap, entry, ber)
       }//end while
       ber_free(ber, 0)
     }//end init
@@ -259,11 +296,11 @@ public class LDAP {
     /// - parameters:
     ///   - ldap: the LDAP handler
     ///   - reference: the LDAPMessage (single element)
-    public init(ldap:OpaquePointer, reference:OpaquePointer) {
+    public init(ldap:LDAP, reference:OpaquePointer) {
       var referrals = UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>(bitPattern: 0)
 
       // *NOTE* ldap_value_free is deprecated so have to use memfree in chain instead
-      let r = ldap_parse_reference(ldap, reference, &referrals, nil, 0)
+      let r = ldap_parse_reference(ldap.ldap, reference, &referrals, nil, 0)
       guard r == 0 else {
         return
       }//end guard
@@ -272,7 +309,7 @@ public class LDAP {
         guard let pstr = cursor?.pointee else {
           break
         }//end guard
-        _values.append(String(cString: pstr))
+        _values.append(ldap.string(pstr: pstr))
         ldap_memfree(pstr)
         cursor = cursor?.successor()
       }//end while
@@ -311,20 +348,20 @@ public class LDAP {
     /// - parameters:
     ///   - ldap: the LDAP handler
     ///   - result: the LDAPMessage (single element)
-    public init(ldap:OpaquePointer, result:OpaquePointer) {
+    public init(ldap:LDAP, result:OpaquePointer) {
       var emsg = UnsafeMutablePointer<Int8>(bitPattern: 0)
       var msg = UnsafeMutablePointer<Int8>(bitPattern: 0)
       var ref = UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>(bitPattern: 0)
-      let r = ldap_parse_result(ldap, result, &_errCode, &msg, &emsg, &ref, nil, 0)
+      let r = ldap_parse_result(ldap.ldap, result, &_errCode, &msg, &emsg, &ref, nil, 0)
       guard r == 0 else {
         return
       }//end guard
       if msg != nil {
-        _matched = String(cString: msg!)
+        _matched = ldap.string(pstr: msg!)
         ldap_memfree(msg)
       }//end if
       if emsg != nil {
-        _errMsg = String(cString: emsg!)
+        _errMsg = ldap.string(pstr: emsg!)
         ldap_memfree(emsg)
       }//end if
       var rf = ref
@@ -332,7 +369,7 @@ public class LDAP {
         guard let p = rf?.pointee else {
           break
         }
-        _ref.append(String(cString: p))
+        _ref.append(ldap.string(pstr: p))
         ldap_memfree(p)
         rf = rf?.successor()
       }//end rf
@@ -383,8 +420,8 @@ public class LDAP {
     /// - parameters:
     ///   - ldap: the LDAP handler
     ///   - chain: the LDAPMessage chain elements
-    public init (ldap: OpaquePointer, chain:OpaquePointer) {
-      var m = ldap_first_message(ldap, chain)
+    public init (ldap: LDAP, chain:OpaquePointer) {
+      var m = ldap_first_message(ldap.ldap, chain)
       while(m != nil) {
         switch(UInt(ldap_msgtype(m))) {
         case LDAP_RES_SEARCH_ENTRY:
@@ -396,7 +433,7 @@ public class LDAP {
         default:
           ()
         }//end case
-        m = ldap_next_message(ldap, m)
+        m = ldap_next_message(ldap.ldap, m)
       }//end while
     }//end init
   }//end struct
@@ -431,7 +468,7 @@ public class LDAP {
     }//next
 
     // process the result set
-    let rs = ResultSet(ldap: ldap!, chain: msg!)
+    let rs = ResultSet(ldap: self, chain: msg!)
 
     // release the memory
     ldap_msgfree(msg)

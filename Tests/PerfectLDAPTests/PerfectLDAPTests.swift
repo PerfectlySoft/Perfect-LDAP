@@ -1,6 +1,7 @@
 import XCTest
 @testable import PerfectLDAP
 import Foundation
+import PerfectICONV
 
 class PerfectLDAPTests: XCTestCase {
   let testURL = "ldap://192.168.56.13"
@@ -10,7 +11,7 @@ class PerfectLDAPTests: XCTestCase {
   func testLogin() {
     do {
       let logfail = expectation(description: "logfail")
-      let ldap = try LDAP(url: testURL)
+      let ldap = try LDAP(url: testURL, codePage: .GB2312)
       ldap.login(username: "abc", password: "123") { result in
         XCTAssertFalse(result)
         logfail.fulfill()
@@ -39,7 +40,7 @@ class PerfectLDAPTests: XCTestCase {
 
   func testLoginSync() {
     do {
-      let ldap = try LDAP(url: testURL)
+      let ldap = try LDAP(url: testURL, codePage: .GB2312)
       let fail = ldap.login(username: "abc", password: "123")
       XCTAssertFalse(fail)
 
@@ -53,15 +54,15 @@ class PerfectLDAPTests: XCTestCase {
 
   func testSearch () {
     do {
-      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD)
+      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD, codePage: .GB2312)
 
       let ser = expectation(description: "search")
-      ldap.search() { res in
+      ldap.search(base:"cn=users,dc=p,dc=com", scope:.SUBTREE) { res in
         guard let r = res else {
           XCTFail("search return nil")
           return
         }//end guard
-        print(r.dictionary)
+        print(r)
         ser.fulfill()
       }//end search
 
@@ -74,7 +75,7 @@ class PerfectLDAPTests: XCTestCase {
   }
   func testSearchSync () {
     do {
-      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD)
+      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD, codePage: .GB2312)
       guard let rs = try ldap.search(base:"cn=users,dc=p,dc=com",filter: "(initials=RW)", scope:.SUBTREE, attributes: ["cn", "company", "displayName", "initials"]) else {
         XCTFail("search failed")
         return
