@@ -151,11 +151,7 @@ public class LDAP {
   public init(url:String = "ldap://localhost", username: String? = nil, password: String? = nil, auth: AuthType = .SIMPLE, codePage: Iconv.CodePage = .UTF8) throws {
 
     if codePage != .UTF8 {
-      do {
-        iconv = try Iconv(from: codePage, to: .UTF8)
-      }catch {
-
-      }///end try
+      iconv = try Iconv(from: codePage, to: .UTF8)
     }//end if
 
     ldap = OpaquePointer(bitPattern: 0)
