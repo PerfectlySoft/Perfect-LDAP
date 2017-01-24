@@ -504,14 +504,23 @@ public class LDAP {
   @discardableResult
   public func search(base:String = "", filter:String = "(objectclass=*)", scope:Scope = .BASE, completion: @escaping (ResultSet?)-> Void) {
     Threading.dispatch {
+      var rs: ResultSet? = nil
       do {
-        completion(try self.search(base: base, filter: filter, scope: scope))
+        rs = try self.search(base: base, filter: filter, scope: scope)
       }catch {
-        completion(nil)
+        rs = nil
       }//end catch
+      completion(rs)
     }//end threading
   }//end search
 
+  /// allocate a modification structure for internal usage
+  /// - parameters:
+  ///   - method: method of modification, i.e., LDAP_MOD_ADD or LDAP_MOD_REPLACE or LDAP_MOD_DELETE and LDAP_MOD_BVALUES
+  ///   - key: attribute name to modify
+  ///   - values: attribute values as an array
+  /// - returns:
+  ///   an LDAPMod structure
   @discardableResult
   internal func modAlloc(method: Int32, key: String, values: [String]) -> LDAPMod {
     let pValues = values.map { self.string(str: $0) }
@@ -519,15 +528,80 @@ public class LDAP {
     return LDAPMod(mod_op: method, mod_type: strdup(key), mod_vals: mod_vals_u(modv_bvals: pointers))
   }//end modAlloc
 
+  /// add an attribute to a DN
+  /// - parameters:
+  ///   - distinguishedName: specific DN
+  ///   - attributes: attributes as an dictionary to add
+  ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
   @discardableResult
   public func add(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void) {
+
+    // map the keys to an array
     let keys:[String] = attributes.keys.map { $0 }
+
+    // map the key array to a modification array
     let mods:[LDAPMod] = keys.map { self.modAlloc(method: LDAP_MOD_ADD | LDAP_MOD_BVALUES, key: $0, values: attributes[$0]!)}
+
+    // get the pointers
     let pMods = mods.asUnsafeNullTerminatedPointers()
 
     Threading.dispatch {
+
+      // perform adding
       let r = ldap_add_ext_s(self.ldap, distinguishedName, pMods, nil, nil)
+
+      // release memory
       ldap_mods_free(pMods, 0)
+
+      // complete callback
+      completion ( r == 0 ? nil : LDAP.error(r) )
+    }//end dispatch
+  }//end func
+
+  /// modify an attribute to a DN
+  /// - parameters:
+  ///   - distinguishedName: specific DN
+  ///   - attributes: attributes as an dictionary to modify
+  ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
+  @discardableResult
+  public func modify(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void) {
+
+    // map the keys to an array
+    let keys:[String] = attributes.keys.map { $0 }
+
+    // map the key array to a modification array
+    let mods:[LDAPMod] = keys.map { self.modAlloc(method: LDAP_MOD_REPLACE | LDAP_MOD_BVALUES, key: $0, values: attributes[$0]!)}
+
+    // get the pointers
+    let pMods = mods.asUnsafeNullTerminatedPointers()
+
+    Threading.dispatch {
+
+      // perform modification
+      let r = ldap_modify_ext_s(self.ldap, distinguishedName, pMods, nil, nil)
+
+      // release memory
+      ldap_mods_free(pMods, 0)
+
+      // complete callback
+      completion ( r == 0 ? nil : LDAP.error(r) )
+    }//end dispatch
+  }//end func
+
+  /// delete an attribute to a DN
+  /// - parameters:
+  ///   - distinguishedName: specific DN
+  ///   - attributes: attributes as an dictionary to delete
+  ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
+  @discardableResult
+  public func delete(distinguishedName: String, completion: @escaping (String?)-> Void) {
+
+    Threading.dispatch {
+
+      // perform deletion
+      let r = ldap_delete_ext_s(self.ldap, distinguishedName, nil, nil)
+
+      // complete callback
       completion ( r == 0 ? nil : LDAP.error(r) )
     }
   }
