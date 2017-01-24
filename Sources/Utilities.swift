@@ -45,7 +45,6 @@ extension Array {
   /// - return:
   ///   a pointer array with each pointer is pointing the corresponding element, ending with a null pointer.
   public func asUnsafeNullTerminatedPointers() -> UnsafeMutablePointer<UnsafeMutablePointer<Element>?> {
-
     let pArray = self.map { value -> UnsafeMutablePointer<Element>? in
       let p = UnsafeMutablePointer<Element>.allocate(capacity: 1)
       p.initialize(to: value)
@@ -58,3 +57,25 @@ extension Array {
     return pointers
   }//func
 }//end array
+
+public func withCArrayOfString<R>(array: [String] = [], _ body: (UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>?) -> R) -> R {
+
+  if array.isEmpty {
+    return body(nil)
+  }//end if
+
+  // duplicate the array and append a null string
+  var attr: [String?] = array
+  attr.append(nil)
+
+  // duplicate again and turn it into an array of pointers
+  var parr = attr.map { $0 == nil ? nil : strdup($0!) }
+
+  // perform the operation
+  let r = parr.withUnsafeMutableBufferPointer { body ($0.baseAddress) }
+
+  // release allocated string pointers.
+  for p in parr { free(UnsafeMutablePointer(mutating: p)) }
+
+  return r
+}//end withCArrayOfString

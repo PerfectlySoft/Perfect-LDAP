@@ -65,7 +65,7 @@ class PerfectLDAPTests: XCTestCase {
           XCTFail("search return nil")
           return
         }//end guard
-        print(r)
+        print(r.dictionary)
         ser.fulfill()
       }//end search
 
@@ -85,11 +85,27 @@ class PerfectLDAPTests: XCTestCase {
       }//end guard
       print("-------------------------------------------------------")
       print(rs.dictionary)
-      print("-------------------------------------------------------")
     }catch(let err) {
       XCTFail("error: \(err)")
     }
-    
+
+  }
+
+  func testServerSort () {
+    do {
+      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD, codePage: .GB2312)
+      print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+      let sort = LDAP.sortingString(sortedBy: [("displayName", .DSC), ("initials", .ASC)])
+      print(sort)
+      guard let res = try ldap.search(base:"cn=users,dc=p,dc=com",scope:.SUBTREE, attributes: ["displayName", "initials"], sortedBy: sort) else {
+        XCTFail("server control failed")
+        return
+      }//end guard
+      print(res.dictionary)
+    }catch(let err) {
+      XCTFail("server control: \(err)")
+    }
+
   }
 
   func testAttributeMod () {
@@ -129,7 +145,8 @@ class PerfectLDAPTests: XCTestCase {
       ("testLoginSync", testLoginSync),
       ("testSearch", testSearch),
       ("testSearchSync", testSearchSync),
-      ("testAttributeMod", testAttributeMod)
+      ("testAttributeMod", testAttributeMod),
+      ("testServerSort", testServerSort)
     ]
   }
 }
