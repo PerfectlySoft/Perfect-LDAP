@@ -99,7 +99,14 @@ class PerfectLDAPTests: XCTestCase {
       print("=======================================================")
       print(rs.dictionary)
       print("=======================================================")
-      try ldap.add(distinguishedName: "CN=Rockford Wei,CN=Users,DC=p,DC=com", attributes: ["mail":["rocky@perfect.org", "rockywei@gmx.com"], "otherMailbox":["rockywei524@gmail.com"]])
+      let add = expectation(description: "search")
+      ldap.add(distinguishedName: "CN=Rockford Wei,CN=Users,DC=p,DC=com", attributes: ["mail":["rocky@perfect.org", "rockywei@gmx.com"], "otherMailbox":["rockywei524@gmail.com"]]) { err in
+        add.fulfill()
+        XCTAssertNil(err)
+      }//end add
+      self.waitForExpectations(timeout: 10){ error in
+        XCTAssertNil(error)
+      }
       guard let res = try ldap.search(base:"cn=users,dc=p,dc=com",filter: "(initials=RW)", scope:.SUBTREE) else {
         XCTFail("search failed")
         return

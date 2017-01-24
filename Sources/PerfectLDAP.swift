@@ -513,27 +513,23 @@ public class LDAP {
   }//end search
 
   @discardableResult
-  internal func modAlloc(key: String, values: [String]) -> LDAPMod {
+  internal func modAlloc(method: Int32, key: String, values: [String]) -> LDAPMod {
     let pValues = values.map { self.string(str: $0) }
     let pointers = pValues.asUnsafeNullTerminatedPointers()
-    return LDAPMod(mod_op: LDAP_MOD_ADD | LDAP_MOD_BVALUES, mod_type: strdup(key), mod_vals: mod_vals_u(modv_bvals: pointers))
+    return LDAPMod(mod_op: method, mod_type: strdup(key), mod_vals: mod_vals_u(modv_bvals: pointers))
   }//end modAlloc
 
   @discardableResult
-  public func add(distinguishedName: String, attributes: [String:[String]]) throws {
-
+  public func add(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void) {
     let keys:[String] = attributes.keys.map { $0 }
-
-    let mods:[LDAPMod] = keys.map { self.modAlloc(key: $0, values: attributes[$0]!)}
-
+    let mods:[LDAPMod] = keys.map { self.modAlloc(method: LDAP_MOD_ADD | LDAP_MOD_BVALUES, key: $0, values: attributes[$0]!)}
     let pMods = mods.asUnsafeNullTerminatedPointers()
 
-    let r = ldap_add_ext_s(ldap, distinguishedName, pMods, nil, nil)
-    ldap_mods_free(pMods, 0)
-
-    if r != 0 {
-      throw Exception.message(LDAP.error(r))
-    }//end if
+    Threading.dispatch {
+      let r = ldap_add_ext_s(self.ldap, distinguishedName, pMods, nil, nil)
+      ldap_mods_free(pMods, 0)
+      completion ( r == 0 ? nil : LDAP.error(r) )
+    }
   }
 }//end class
 
