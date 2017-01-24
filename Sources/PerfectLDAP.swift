@@ -115,6 +115,9 @@ public class LDAP {
   /// codepage convertor
   internal var iconv: Iconv? = nil
 
+  /// codepage reversely convertor
+  internal var iconvR: Iconv? = nil
+
   /// convert string if encoding is required
   /// - parameters:
   ///   - ber: struct berval of the original buffer
@@ -137,6 +140,24 @@ public class LDAP {
     return self.string(ber: ber)
   }//end ber
 
+  /// convert string to encoded binary data reversely
+  /// *NOTE* MUST BE FREE MANUALLY
+  /// - parameters:
+  ///   - str: source utf8 string
+  /// - returns:
+  ///   encoded berval structure
+  public func string(str: String) -> berval {
+    guard let i = iconvR else {
+      return str.withCString { ptr -> berval in
+        return berval(bv_len: ber_len_t(str.utf8.count), bv_val: strdup(ptr))
+      }//end str
+    }//end str
+    return str.withCString { ptr -> berval in
+      let (p, sz) = i.convert(buf: ptr, length: str.utf8.count)
+      return berval(bv_len: ber_len_t(sz), bv_val: p)
+    }//end str
+  }//end string
+
   /// constructor of LDAP. could be a simple LDAP() to local server or LDAP(url) with / without logon options.
   /// if login parameters were input, the process would block until finished.
   /// so it is strongly recommanded that call LDAP() without login option and call ldap.login() {} in async mode
@@ -151,7 +172,9 @@ public class LDAP {
   public init(url:String = "ldap://localhost", username: String? = nil, password: String? = nil, auth: AuthType = .SIMPLE, codePage: Iconv.CodePage = .UTF8) throws {
 
     if codePage != .UTF8 {
+      // we need a pair of code pages to transit in both directions.
       iconv = try Iconv(from: codePage, to: .UTF8)
+      iconvR = try Iconv(from: .UTF8, to: codePage)
     }//end if
 
     ldap = OpaquePointer(bitPattern: 0)
@@ -488,6 +511,30 @@ public class LDAP {
       }//end catch
     }//end threading
   }//end search
+
+  @discardableResult
+  internal func modAlloc(key: String, values: [String]) -> LDAPMod {
+    let pValues = values.map { self.string(str: $0) }
+    let pointers = pValues.asUnsafeNullTerminatedPointers()
+    return LDAPMod(mod_op: LDAP_MOD_ADD | LDAP_MOD_BVALUES, mod_type: strdup(key), mod_vals: mod_vals_u(modv_bvals: pointers))
+  }//end modAlloc
+
+  @discardableResult
+  public func add(distinguishedName: String, attributes: [String:[String]]) throws {
+
+    let keys:[String] = attributes.keys.map { $0 }
+
+    let mods:[LDAPMod] = keys.map { self.modAlloc(key: $0, values: attributes[$0]!)}
+
+    let pMods = mods.asUnsafeNullTerminatedPointers()
+
+    let r = ldap_add_ext_s(ldap, distinguishedName, pMods, nil, nil)
+    ldap_mods_free(pMods, 0)
+
+    if r != 0 {
+      throw Exception.message(LDAP.error(r))
+    }//end if
+  }
 }//end class
 
 

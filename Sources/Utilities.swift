@@ -1,5 +1,5 @@
 //
-//  BerString.swift
+//  Utilities.swift
 //  PerfectLDAP
 //
 //  Created by Rocky Wei on 2017-01-21.
@@ -23,7 +23,7 @@ import OpenLDAP
 extension Iconv {
 
   /// directly convert a string from a berval structure
-  /// - parametres:
+  /// - parameters:
   ///   - from: struct berval, pointer to transit
   /// - returns:
   ///   encoded string
@@ -37,3 +37,24 @@ extension Iconv {
     return str ?? ""
   }//end convert
 }
+
+extension Array {
+
+  /// generic function of converting array to a null terminated pointer array
+  /// *CAUTION* memory MUST BE RELEASED MANUALLY
+  /// - return:
+  ///   a pointer array with each pointer is pointing the corresponding element, ending with a null pointer.
+  public func asUnsafeNullTerminatedPointers() -> UnsafeMutablePointer<UnsafeMutablePointer<Element>?> {
+
+    let pArray = self.map { value -> UnsafeMutablePointer<Element>? in
+      let p = UnsafeMutablePointer<Element>.allocate(capacity: 1)
+      p.initialize(to: value)
+      return p
+    }//end map
+
+    let pointers = UnsafeMutablePointer<UnsafeMutablePointer<Element>?>.allocate(capacity: self.count + 1)
+    pointers.initialize(from: pArray)
+    pointers.advanced(by: self.count).pointee = UnsafeMutablePointer<Element>(bitPattern: 0)
+    return pointers
+  }//func
+}//end array

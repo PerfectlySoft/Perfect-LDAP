@@ -89,13 +89,37 @@ class PerfectLDAPTests: XCTestCase {
     
   }
 
+  func testAttributeMod () {
+    do {
+      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD, codePage: .GB2312)
+      guard let rs = try ldap.search(base:"cn=users,dc=p,dc=com",filter: "(initials=RW)", scope:.SUBTREE) else {
+        XCTFail("search failed")
+        return
+      }//end guard
+      print("=======================================================")
+      print(rs.dictionary)
+      print("=======================================================")
+      try ldap.add(distinguishedName: "CN=Rockford Wei,CN=Users,DC=p,DC=com", attributes: ["mail":["rocky@perfect.org", "rockywei@gmx.com"], "otherMailbox":["rockywei524@gmail.com"]])
+      guard let res = try ldap.search(base:"cn=users,dc=p,dc=com",filter: "(initials=RW)", scope:.SUBTREE) else {
+        XCTFail("search failed")
+        return
+      }//end guard
+      print("=======================================================")
+      print(res.dictionary)
+      print("=======================================================")
+    }catch(let err) {
+      XCTFail("error: \(err)")
+    }
+
+  }
 
   static var allTests : [(String, (PerfectLDAPTests) -> () throws -> Void)] {
     return [
       ("testLogin", testLogin),
       ("testLoginSync", testLoginSync),
       ("testSearch", testSearch),
-      ("testSearchSync", testSearchSync)
+      ("testSearchSync", testSearchSync),
+      ("testAttributeMod", testAttributeMod)
     ]
   }
 }
