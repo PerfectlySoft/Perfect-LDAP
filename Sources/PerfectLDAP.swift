@@ -532,9 +532,10 @@ public class LDAP {
   /// - parameters:
   ///   - distinguishedName: specific DN
   ///   - attributes: attributes as an dictionary to add
-  ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
+  /// - throws:
+  ///   - Exception with message, such as no permission, or object class violation, etc.
   @discardableResult
-  public func add(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void) {
+  public func add(distinguishedName: String, attributes: [String:[String]]) throws {
 
     // map the keys to an array
     let keys:[String] = attributes.keys.map { $0 }
@@ -545,16 +546,41 @@ public class LDAP {
     // get the pointers
     let pMods = mods.asUnsafeNullTerminatedPointers()
 
+    // perform adding
+    let r = ldap_add_ext_s(self.ldap, distinguishedName, pMods, nil, nil)
+
+    // release memory
+    ldap_mods_free(pMods, 0)
+
+    if r == 0 {
+      return
+    }//end if
+
+    throw Exception.message(LDAP.error(r))
+  }//end func
+
+  /// add an attribute to a DN
+  /// - parameters:
+  ///   - distinguishedName: specific DN
+  ///   - attributes: attributes as an dictionary to add
+  ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
+  @discardableResult
+  public func add(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void) {
+
     Threading.dispatch {
+      do {
+        // perform adding
+        try self.add(distinguishedName: distinguishedName, attributes: attributes)
 
-      // perform adding
-      let r = ldap_add_ext_s(self.ldap, distinguishedName, pMods, nil, nil)
+        // if nothing wrong, callback
+        completion(nil)
 
-      // release memory
-      ldap_mods_free(pMods, 0)
+      }catch(let err) {
 
-      // complete callback
-      completion ( r == 0 ? nil : LDAP.error(r) )
+        // otherwise callback an error
+        completion("\(err)")
+      }//end do
+
     }//end dispatch
   }//end func
 
@@ -562,9 +588,10 @@ public class LDAP {
   /// - parameters:
   ///   - distinguishedName: specific DN
   ///   - attributes: attributes as an dictionary to modify
-  ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
+  /// - throws:
+  ///   - Exception with message, such as no permission, or object class violation, etc.
   @discardableResult
-  public func modify(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void) {
+  public func modify(distinguishedName: String, attributes: [String:[String]]) throws {
 
     // map the keys to an array
     let keys:[String] = attributes.keys.map { $0 }
@@ -575,18 +602,61 @@ public class LDAP {
     // get the pointers
     let pMods = mods.asUnsafeNullTerminatedPointers()
 
+    // perform modification
+    let r = ldap_modify_ext_s(self.ldap, distinguishedName, pMods, nil, nil)
+
+    // release memory
+    ldap_mods_free(pMods, 0)
+
+    if r == 0 {
+      return
+    }//end if
+
+    throw Exception.message(LDAP.error(r))
+  }//end func
+
+  /// modify an attribute to a DN
+  /// - parameters:
+  ///   - distinguishedName: specific DN
+  ///   - attributes: attributes as an dictionary to modify
+  ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
+  @discardableResult
+  public func modify(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void) {
     Threading.dispatch {
+      do {
+        // perform adding
+        try self.modify(distinguishedName: distinguishedName, attributes: attributes)
 
-      // perform modification
-      let r = ldap_modify_ext_s(self.ldap, distinguishedName, pMods, nil, nil)
+        // if nothing wrong, callback
+        completion(nil)
 
-      // release memory
-      ldap_mods_free(pMods, 0)
+      }catch(let err) {
 
-      // complete callback
-      completion ( r == 0 ? nil : LDAP.error(r) )
+        // otherwise callback an error
+        completion("\(err)")
+      }//end do
+      
     }//end dispatch
   }//end func
+
+  /// delete an attribute to a DN
+  /// - parameters:
+  ///   - distinguishedName: specific DN
+  ///   - attributes: attributes as an dictionary to delete
+  /// - throws:
+  ///   - Exception with message, such as no permission, or object class violation, etc.
+  @discardableResult
+  public func delete(distinguishedName: String) throws {
+
+    // perform deletion
+    let r = ldap_delete_ext_s(self.ldap, distinguishedName, nil, nil)
+
+    if r == 0 {
+      return
+    }//end if
+
+    throw Exception.message(LDAP.error(r))
+  }
 
   /// delete an attribute to a DN
   /// - parameters:
@@ -595,15 +665,21 @@ public class LDAP {
   ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
   @discardableResult
   public func delete(distinguishedName: String, completion: @escaping (String?)-> Void) {
-
     Threading.dispatch {
+      do {
+        // perform adding
+        try self.delete(distinguishedName: distinguishedName)
 
-      // perform deletion
-      let r = ldap_delete_ext_s(self.ldap, distinguishedName, nil, nil)
+        // if nothing wrong, callback
+        completion(nil)
 
-      // complete callback
-      completion ( r == 0 ? nil : LDAP.error(r) )
-    }
+      }catch(let err) {
+
+        // otherwise callback an error
+        completion("\(err)")
+      }//end do
+
+    }//end dispatch
   }
 }//end class
 
