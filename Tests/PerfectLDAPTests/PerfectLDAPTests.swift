@@ -46,6 +46,9 @@ class PerfectLDAPTests: XCTestCase {
 
       let succ = ldap.login(username: testUSR, password: testPWD)
       XCTAssertTrue(succ)
+
+      try ldap.checkServerSideControls()
+      print(ldap._supportedControls)
     }catch(let err) {
       XCTFail("testLoginSync error: \(err)")
     }

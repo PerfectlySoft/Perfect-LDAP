@@ -158,6 +158,22 @@ public class LDAP {
     }//end str
   }//end string
 
+  public var _supportedControls = [String]()
+
+  /// load session control OIDs from server
+  /// - throws:
+  ///   Exception with messages.
+  public func checkServerSideControls() throws {
+    guard let r = try self.search() else {
+      throw Exception.message("load controls failed")
+    }//end guard
+    guard let root = r.dictionary[""] else {
+      throw Exception.message("control has no expected key")
+    }//end guard
+    _supportedControls = root["supportedControl"] as? [String] ?? []
+    
+  }//end func
+
   /// constructor of LDAP. could be a simple LDAP() to local server or LDAP(url) with / without logon options.
   /// if login parameters were input, the process would block until finished.
   /// so it is strongly recommanded that call LDAP() without login option and call ldap.login() {} in async mode
