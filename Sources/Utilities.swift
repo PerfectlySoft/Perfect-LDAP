@@ -53,15 +53,15 @@ extension Array {
 
     let pointers = UnsafeMutablePointer<UnsafeMutablePointer<Element>?>.allocate(capacity: self.count + 1)
     pointers.initialize(from: pArray)
-    pointers.advanced(by: self.count).pointee = UnsafeMutablePointer<Element>(bitPattern: 0)
+    pointers.advanced(by: self.count).pointee = nil
     return pointers
   }//func
 }//end array
 
-public func withCArrayOfString<R>(array: [String] = [], _ body: (UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>?) -> R) -> R {
+public func withCArrayOfString<R>(array: [String] = [], _ body: (UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>?) throws -> R) rethrows -> R {
 
   if array.isEmpty {
-    return body(nil)
+    return try body(nil)
   }//end if
 
   // duplicate the array and append a null string
@@ -72,10 +72,11 @@ public func withCArrayOfString<R>(array: [String] = [], _ body: (UnsafeMutablePo
   var parr = attr.map { $0 == nil ? nil : strdup($0!) }
 
   // perform the operation
-  let r = parr.withUnsafeMutableBufferPointer { body ($0.baseAddress) }
+  let r = try parr.withUnsafeMutableBufferPointer { try body ($0.baseAddress) }
 
   // release allocated string pointers.
   for p in parr { free(UnsafeMutablePointer(mutating: p)) }
 
   return r
 }//end withCArrayOfString
+

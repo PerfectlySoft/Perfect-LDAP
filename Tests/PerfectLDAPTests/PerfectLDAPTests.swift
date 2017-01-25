@@ -2,6 +2,7 @@ import XCTest
 @testable import PerfectLDAP
 import Foundation
 import PerfectICONV
+import OpenLDAP
 
 class PerfectLDAPTests: XCTestCase {
   let testURL = "ldap://192.168.56.13"
@@ -44,11 +45,15 @@ class PerfectLDAPTests: XCTestCase {
       let fail = ldap.login(username: "abc", password: "123")
       XCTAssertFalse(fail)
 
+      print("        --          --              ---            ---")
+      print(ldap.supportedControl)
+      print(ldap.supportedExtension)
+      print(ldap.supportedSASLMechanisms)
+      
+      print("        --          --              ---            ---")
       let succ = ldap.login(username: testUSR, password: testPWD)
       XCTAssertTrue(succ)
 
-      try ldap.checkServerSideControls()
-      print(ldap._supportedControls)
     }catch(let err) {
       XCTFail("testLoginSync error: \(err)")
     }
@@ -139,6 +144,41 @@ class PerfectLDAPTests: XCTestCase {
 
   }
 
+  func testSASLDefaults () {
+    do {
+      let ldap = try LDAP(url: "ldap://192.168.56.13")
+
+      let sasl = ldap.supportedSASL
+      guard let gssapi = sasl[LDAP.AuthType.GSSAPI] else {
+        XCTFail("GSSAPI FAULT")
+        return
+      }
+      print(gssapi)
+
+      guard let spnego = sasl[LDAP.AuthType.SPNEGO] else {
+        XCTFail("SPNEGO FAULT")
+        return
+      }
+      print(spnego)
+      
+      let r = ldap.withUnsafeSASLDefaultsPointer(mech: "GSSAPI", realm: "PERFECT") { ptr -> Int in
+        guard let p = ptr else {
+          return 0
+        }//end if
+        let pdef = unsafeBitCast(p, to: UnsafeMutablePointer<lutilSASLdefaults>.self)
+        let def = pdef.pointee
+        let mech = String(cString: def.mech)
+        let realm = String(cString: def.realm)
+        XCTAssertEqual(mech, "GSSAPI")
+        XCTAssertEqual(realm, "PERFECT")
+        return 100
+      }//en r
+      XCTAssertEqual(r, 100)
+    }catch(let err) {
+      XCTFail("error: \(err)")
+    }
+  }
+
   static var allTests : [(String, (PerfectLDAPTests) -> () throws -> Void)] {
     return [
       ("testLogin", testLogin),
@@ -146,7 +186,8 @@ class PerfectLDAPTests: XCTestCase {
       ("testSearch", testSearch),
       ("testSearchSync", testSearchSync),
       ("testAttributeMod", testAttributeMod),
-      ("testServerSort", testServerSort)
+      ("testServerSort", testServerSort),
+      ("testSASLDefaults", testSASLDefaults)
     ]
   }
 }

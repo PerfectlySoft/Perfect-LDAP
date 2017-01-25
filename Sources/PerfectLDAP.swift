@@ -90,7 +90,7 @@ public class LDAP {
 
   /// LDAP handler pointer
   internal var ldap: OpaquePointer? = nil
-
+  
   /// codepage convertor
   internal var iconv: Iconv? = nil
 
@@ -137,21 +137,62 @@ public class LDAP {
     }//end str
   }//end string
 
-  public var _supportedControls = [String]()
+  private var _supportedControl = [String]()
+  private var _supportedExtension = [String]()
+  private var _supportedSASLMechanisms = [String]()
+  private var _saslMech: [AuthType:String] = [:]
 
-  /// load session control OIDs from server
-  /// - throws:
-  ///   Exception with messages.
-  public func checkServerSideControls() throws {
-    guard let r = try self.search() else {
-      throw Exception.message("load controls failed")
-    }//end guard
-    guard let root = r.dictionary[""] else {
-      throw Exception.message("control has no expected key")
-    }//end guard
-    _supportedControls = root["supportedControl"] as? [String] ?? []
-    
-  }//end func
+  public var supportedControl: [String] { get { return _supportedControl } }
+  public var supportedExtension: [String] { get { return _supportedExtension } }
+  public var supportedSASLMechanisms: [String] { get { return _supportedSASLMechanisms } }
+  public var supportedSASL: [AuthType:String] { get { return _saslMech } }
+
+  public func withUnsafeSASLDefaultsPointer<R>(mech: String = "", realm: String = "", authcid: String = "", passwd: String = "", authzid: String = "",_ body: (UnsafeMutableRawPointer?) throws -> R) rethrows -> R {
+    var def = lutilSASLdefaults(mech: nil, realm: nil, authcid: nil, passwd: nil, authzid: nil, resps: nil, nresps: 0)
+    if mech.isEmpty {
+      let _ = ldap_get_option(self.ldap, LDAP_OPT_X_SASL_MECH, &(def.mech))
+    } else {
+      def.mech = ber_strdup(mech)
+    }//end if
+    if realm.isEmpty {
+      let _ = ldap_get_option(self.ldap, LDAP_OPT_X_SASL_REALM, &(def.realm))
+    } else {
+      def.realm = ber_strdup(realm)
+    }//end if
+    if authcid.isEmpty {
+      let _ = ldap_get_option(self.ldap, LDAP_OPT_X_SASL_AUTHCID, &(def.authcid))
+    } else {
+      def.authcid = ber_strdup(authcid)
+    }//end if
+    if authzid.isEmpty {
+      let _ = ldap_get_option(self.ldap, LDAP_OPT_X_SASL_AUTHZID, &(def.authzid))
+    } else {
+      def.authzid = ber_strdup(authzid)
+    }//end if
+    if !passwd.isEmpty {
+      def.passwd = ber_strdup(passwd)
+    }//end if
+
+    let r = try body(UnsafeMutablePointer(mutating: &def))
+
+    if def.mech != nil {
+      ber_memfree(def.mech)
+    }//end if
+    if def.realm != nil {
+      ber_memfree(def.realm)
+    }//end if
+    if def.authcid != nil {
+      ber_memfree(def.authcid)
+    }//end if
+    if def.authzid != nil {
+      ber_memfree(def.authzid)
+    }//end if
+    if def.passwd != nil {
+      ber_memfree(def.passwd)
+    }//end if
+
+    return r
+  }
 
   /// constructor of LDAP. could be a simple LDAP() to local server or LDAP(url) with / without logon options.
   /// if login parameters were input, the process would block until finished.
@@ -178,6 +219,26 @@ public class LDAP {
       throw Exception.message(LDAP.error(r))
     }//end guard
 
+    guard let dse = try search() else {
+      throw Exception.message("ROOT DSE FAULT")
+    }//end dse
+
+    guard let root = dse.dictionary[""] else {
+      throw Exception.message("ROOT DSE HAS NO EXPECTED KEY")
+    }//end root
+
+    _supportedControl = root["supportedControl"] as? [String] ?? []
+    _supportedExtension = root["supportedExtension"] as? [String] ?? []
+    _supportedSASLMechanisms = root["supportedSASLMechanisms"] as? [String] ?? []
+
+    _supportedSASLMechanisms.forEach { mech in
+      if strstr(mech, "GSSAPI") != nil {
+        _saslMech[AuthType.GSSAPI] = mech
+      }else if strstr(mech, "GSS-SPNEGO") != nil {
+        _saslMech[AuthType.SPNEGO] = mech
+      }//end if
+    }//next
+
     // if no login required, skip.
     if username == nil || password == nil {
       return
@@ -198,10 +259,24 @@ public class LDAP {
   ///   true for a successful login.
   @discardableResult
   public func login(username: String, password: String, auth: AuthType = .SIMPLE) -> Bool {
-    var cred = berval(bv_len: ber_len_t(password.utf8.count), bv_val: ber_strdup(password))
-    let r = ldap_sasl_bind_s(self.ldap, username, nil, &cred, nil, nil, nil)
-    ber_memfree(cred.bv_val)
-    return r == 0
+    var r = Int32(0)
+    switch auth {
+    case .SIMPLE:
+      var cred = berval(bv_len: ber_len_t(password.utf8.count), bv_val: ber_strdup(password))
+      r = ldap_sasl_bind_s(self.ldap, username, nil, &cred, nil, nil, nil)
+      ber_memfree(cred.bv_val)
+      return r == 0
+    case .GSSAPI:
+      /*
+      r = ldap_sasl_interactive_bind_s(ldap, username, _saslMech[.GSSAPI], nil, nil, LDAP_SASL_AUTOMATIC, { opaque, uint32, raw1, raw2 in return Int32(0)}, <#T##defaults: UnsafeMutableRawPointer!##UnsafeMutableRawPointer!#>)
+       **/
+      return true
+    case .SPNEGO:
+      return true
+    default:
+      // not support - always failed
+      return false
+    }
   }//end login
 
   /// Login in asynchronized mode. Once completed, it would invoke the callback handler
