@@ -17,6 +17,9 @@
 //===----------------------------------------------------------------------===//
 //
 
+/// C library of SASL
+import SASL
+
 /// C library of OpenLDAP
 import OpenLDAP
 
@@ -25,6 +28,9 @@ import PerfectThread
 
 /// Iconv
 import PerfectICONV
+
+/// CArray Helper
+import PerfectCArray
 
 /// Perfect LDAP Module
 public class LDAP {
@@ -205,7 +211,7 @@ public class LDAP {
   ///   - codePage: object server coding page, e.g., GB2312, BIG5 or JS
   /// - throws:
   ///   possible exceptions of initial failed or access denied
-  public init(url:String = "ldap://localhost", username: String? = nil, password: String? = nil, auth: AuthType = .SIMPLE, codePage: Iconv.CodePage = .UTF8) throws {
+  public init(url:String = "ldap://localhost", username: String? = nil, password: String? = nil, realm: String? = nil, auth: AuthType = .SIMPLE, codePage: Iconv.CodePage = .UTF8) throws {
 
     if codePage != .UTF8 {
       // we need a pair of code pages to transit in both directions.
@@ -245,10 +251,10 @@ public class LDAP {
     }//end if
 
     // call login internally
-    guard login(username: username ?? "", password: password ?? "", auth: auth) else {
-      throw Exception.message("Access Denied")
-    }//end _login
+    try login(username: username ?? "", password: password ?? "", realm: realm ?? "", auth: auth)
   }//end init
+
+
 
   /// login in synchronized mode, will block the calling thread
   /// - parameters:
@@ -258,25 +264,65 @@ public class LDAP {
   /// - returns:
   ///   true for a successful login.
   @discardableResult
-  public func login(username: String, password: String, auth: AuthType = .SIMPLE) -> Bool {
+  public func login(username: String, password: String, realm: String = "", auth: AuthType = .SIMPLE) throws {
     var r = Int32(0)
+    let ex = Exception.message("UNSUPPORTED SECURITY MECH")
     switch auth {
     case .SIMPLE:
       var cred = berval(bv_len: ber_len_t(password.utf8.count), bv_val: ber_strdup(password))
       r = ldap_sasl_bind_s(self.ldap, username, nil, &cred, nil, nil, nil)
       ber_memfree(cred.bv_val)
-      return r == 0
-    case .GSSAPI:
-      /*
-      r = ldap_sasl_interactive_bind_s(ldap, username, _saslMech[.GSSAPI], nil, nil, LDAP_SASL_AUTOMATIC, { opaque, uint32, raw1, raw2 in return Int32(0)}, <#T##defaults: UnsafeMutableRawPointer!##UnsafeMutableRawPointer!#>)
-       **/
-      return true
-    case .SPNEGO:
-      return true
+    case .GSSAPI, .SPNEGO:
+      guard let mech = _saslMech[auth] else {
+        throw ex
+      }//end
+      r = self.withUnsafeSASLDefaultsPointer(mech: mech, realm: realm, authcid: username, passwd: password) { ldap_sasl_interactive_bind_s(ldap, username, _saslMech[.GSSAPI], nil, nil, LDAP_SASL_AUTOMATIC, { ldapHandle, flags, defaults, input in
+
+        guard flags != LDAP_SASL_QUIET else {
+          return LDAP_OTHER
+        }//END GUARD
+
+        let defaultsPointer = unsafeBitCast(defaults, to: UnsafeMutablePointer<lutilSASLdefaults>.self)
+        let def = defaultsPointer.pointee
+
+        guard let pInput = input else {
+          return -1
+        }//end guard
+
+        var cursor: UnsafeMutablePointer<sasl_interact_t> = unsafeBitCast(pInput, to: UnsafeMutablePointer<sasl_interact_t>.self)
+
+        var interact = cursor.pointee
+
+        while(Int32(interact.id) != SASL_CB_LIST_END) {
+
+          switch(Int32(interact.id)) {
+          case SASL_CB_GETREALM:
+            SASLReply(pInteract: cursor, pDefaults: defaultsPointer, pMsg: def.realm)
+          case SASL_CB_AUTHNAME:
+            SASLReply(pInteract: cursor, pDefaults: defaultsPointer, pMsg: def.authcid)
+          case SASL_CB_PASS:
+            SASLReply(pInteract: cursor, pDefaults: defaultsPointer, pMsg: def.passwd)
+          case SASL_CB_USER:
+            SASLReply(pInteract: cursor, pDefaults: defaultsPointer, pMsg: def.authzid)
+          case SASL_CB_NOECHOPROMPT, SASL_CB_ECHOPROMPT: // skipped
+            ()
+          default: //unknown
+            return -1
+          }//end case
+          cursor.pointee = interact
+          cursor = cursor.successor()
+          interact = cursor.pointee
+        }//end while
+
+        return Int32(0)}, $0) }
     default:
-      // not support - always failed
-      return false
+      throw ex
     }
+    if r == 0 {
+      return
+    }else {
+      throw Exception.message(LDAP.error(r))
+    }//end
   }//end login
 
   /// Login in asynchronized mode. Once completed, it would invoke the callback handler
@@ -285,10 +331,14 @@ public class LDAP {
   ///   - password: String, password for login, optional.
   ///   - auth: AuthType, such as SIMPLE, GSSAPI, SPNEGO or DIGEST MD5
   ///   - completion: callback handler with a boolean parameter indicating whether login succeeded or not.
-  public func login(username: String, password: String, auth: AuthType = .SIMPLE, completion: @escaping (Bool)->Void) {
+  public func login(username: String, password: String, realm: String = "", auth: AuthType = .SIMPLE, completion: @escaping (String?)->Void) {
     Threading.dispatch {
-      let r = self.login(username: username, password: password, auth: auth)
-      completion(r)
+      do {
+        try self.login(username: username, password: password, realm: realm, auth: auth)
+        completion(nil)
+      }catch(let err) {
+        completion("LOGIN FAILED: \(err)")
+      }
     }//end thread
   }//end login
 

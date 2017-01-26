@@ -8,13 +8,14 @@ class PerfectLDAPTests: XCTestCase {
   let testURL = "ldap://192.168.56.13"
   let testUSR = "rocky@p.com"
   let testPWD = "rockford"
+  let testRLM = "P"
 
   func testLogin() {
     do {
       let logfail = expectation(description: "logfail")
       let ldap = try LDAP(url: testURL, codePage: .GB2312)
-      ldap.login(username: "abc", password: "123") { result in
-        XCTAssertFalse(result)
+      ldap.login(username: "abc", password: "123") { err in
+        XCTAssertNotNil(err)
         logfail.fulfill()
         print("log failed passed")
       }//end log
@@ -24,8 +25,8 @@ class PerfectLDAPTests: XCTestCase {
       }//end wait
 
       let logsuc = expectation(description: "logsuc")
-      ldap.login(username: testUSR, password: testPWD) { result in
-        XCTAssertTrue(result)
+      ldap.login(username: testUSR, password: testPWD) { err in
+        XCTAssertNil(err)
         logsuc.fulfill()
         print("log real passed")
       }//end log
@@ -42,18 +43,20 @@ class PerfectLDAPTests: XCTestCase {
   func testLoginSync() {
     do {
       let ldap = try LDAP(url: testURL, codePage: .GB2312)
-      let fail = ldap.login(username: "abc", password: "123")
-      XCTAssertFalse(fail)
+      try ldap.login(username: "abc", password: "123")
 
       print("        --          --              ---            ---")
       print(ldap.supportedControl)
       print(ldap.supportedExtension)
       print(ldap.supportedSASLMechanisms)
-      
-      print("        --          --              ---            ---")
-      let succ = ldap.login(username: testUSR, password: testPWD)
-      XCTAssertTrue(succ)
+    }catch {
+      // bad password is supposed to fail.
+    }
 
+    do {
+      let ldap = try LDAP(url: testURL, codePage: .GB2312)
+      print("        --          --              ---            ---")
+      try ldap.login(username: testUSR, password: testPWD)
     }catch(let err) {
       XCTFail("testLoginSync error: \(err)")
     }
@@ -62,7 +65,7 @@ class PerfectLDAPTests: XCTestCase {
 
   func testSearch () {
     do {
-      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD, codePage: .GB2312)
+      let ldap = try LDAP(url: testURL, username: testUSR, password: testPWD, codePage: .GB2312)
 
       let ser = expectation(description: "search")
       ldap.search(base:"cn=users,dc=p,dc=com", scope:.SUBTREE) { res in
@@ -83,7 +86,7 @@ class PerfectLDAPTests: XCTestCase {
   }
   func testSearchSync () {
     do {
-      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD, codePage: .GB2312)
+      let ldap = try LDAP(url: testURL, username: testUSR, password: testPWD, codePage: .GB2312)
       guard let rs = try ldap.search(base:"cn=users,dc=p,dc=com",filter: "(initials=RW)", scope:.SUBTREE, attributes: ["cn", "company", "displayName", "initials"]) else {
         XCTFail("search failed")
         return
@@ -98,7 +101,7 @@ class PerfectLDAPTests: XCTestCase {
 
   func testServerSort () {
     do {
-      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD, codePage: .GB2312)
+      let ldap = try LDAP(url: testURL, username: testUSR, password: testPWD, codePage: .GB2312)
       print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
       let sort = LDAP.sortingString(sortedBy: [("displayName", .DSC), ("initials", .ASC)])
       print(sort)
@@ -115,7 +118,7 @@ class PerfectLDAPTests: XCTestCase {
 
   func testAttributeMod () {
     do {
-      let ldap = try LDAP(url: "ldap://192.168.56.13", username: testUSR, password: testPWD, codePage: .GB2312)
+      let ldap = try LDAP(url: testURL, username: testUSR, password: testPWD, codePage: .GB2312)
       guard let rs = try ldap.search(base:"cn=users,dc=p,dc=com",filter: "(initials=RW)", scope:.SUBTREE) else {
         XCTFail("search failed")
         return
@@ -146,7 +149,8 @@ class PerfectLDAPTests: XCTestCase {
 
   func testSASLDefaults () {
     do {
-      let ldap = try LDAP(url: "ldap://192.168.56.13")
+
+      let ldap = try LDAP(url: testURL)
 
       let sasl = ldap.supportedSASL
       guard let gssapi = sasl[LDAP.AuthType.GSSAPI] else {
@@ -179,6 +183,16 @@ class PerfectLDAPTests: XCTestCase {
     }
   }
 
+  func testSASLogin() {
+    do {
+
+      let ldap = try LDAP(url: testURL)
+      try ldap.login(username: testUSR, password: testPWD, realm: testRLM, auth: .GSSAPI)
+    }catch(let err) {
+      XCTFail("error: \(err)")
+    }
+  }
+
   static var allTests : [(String, (PerfectLDAPTests) -> () throws -> Void)] {
     return [
       ("testLogin", testLogin),
@@ -187,7 +201,8 @@ class PerfectLDAPTests: XCTestCase {
       ("testSearchSync", testSearchSync),
       ("testAttributeMod", testAttributeMod),
       ("testServerSort", testServerSort),
-      ("testSASLDefaults", testSASLDefaults)
+      ("testSASLDefaults", testSASLDefaults),
+      ("testSASLogin", testSASLogin)
     ]
   }
 }
