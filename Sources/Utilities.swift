@@ -19,7 +19,6 @@
 
 import PerfectICONV
 import OpenLDAP
-import PerfectCArray
 /// C library of SASL
 import SASL
 
@@ -82,27 +81,6 @@ public func withCArrayOfString<R>(array: [String] = [], _ body: (UnsafeMutablePo
 
   return r
 }//end withCArrayOfString
-
-public var CSTRHelper = CArray<UnsafeMutablePointer<Int8>>()
-
-public func SASLReply(pInteract: UnsafeMutablePointer<sasl_interact_t>, pDefaults: UnsafeMutablePointer<lutilSASLdefaults>, pMsg: UnsafeMutablePointer<Int8>) {
-
-  var defaults = pDefaults.pointee
-  var interact = pInteract.pointee
-
-  interact.len = UInt32(strlen(pMsg))
-  if interact.len < 1 {
-    interact.result = unsafeBitCast(pMsg, to: UnsafeRawPointer.self)
-    return
-  }//end if
-
-  var resps = defaults.resps
-  let _ = CSTRHelper.append(pArray: &resps, element: pMsg)
-  defaults.resps = resps
-  interact.result = CSTRHelper.withArray(of: defaults.resps) { array -> UnsafeRawPointer! in
-    return unsafeBitCast(array[array.count - 1]!, to: UnsafeRawPointer.self)
-  }//end result
-}//end reply
 
 
 

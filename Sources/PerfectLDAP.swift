@@ -29,9 +29,6 @@ import PerfectThread
 /// Iconv
 import PerfectICONV
 
-/// CArray Helper
-import PerfectCArray
-
 /// Perfect LDAP Module
 public class LDAP {
 
@@ -50,7 +47,79 @@ public class LDAP {
     case SPNEGO
     /// DIGEST MD5
     case DIGEST
+    /// OTHER
+    case OTHER
   }//end 
+
+
+  /// Login Data
+  public class Login {
+
+    /// the name of SASL_CB_AUTHNAME, the username to authenticate,
+    /// without any symbols or suffix, usually a lowercased short name "someone"
+    public var authname = "" // "Someone"
+
+    /// distinguished name, usually in form of "CN=Someone,CN=User,CN=domain,CN=com"
+    public var binddn = ""
+
+    /// the name of SASL_CB_USER, the username to use for proxy authorization
+    /// usually with a prefix of "dn=" with binddn: "DN:CN=Someone,CN=User,CN=domain,CN=com"
+    public var user = ""
+
+    /// the password of login
+    public var password = ""
+
+    /// the name of SASL_CB_GETREALM, the realm for the authentication attempt
+    public var realm = ""
+
+    /// mechanism for authentication
+    public var mechanism: AuthType = .SIMPLE
+
+    /// garbage manager
+    internal var trashcan: [UnsafeMutablePointer<Int8>?] = []
+
+    public func drop(garbage: UnsafeMutablePointer<Int8>?) { trashcan.append(garbage) }
+
+    /// contructor for simple login
+    /// - parameters:
+    ///   - binddn: distinguished name, usually in form of "CN=Someone,CN=User,CN=domain,CN=com"
+    ///   - password: the password
+    public init(binddn: String = "", password: String = "") {
+      self.binddn = binddn
+      self.password = password
+      self.mechanism = .SIMPLE
+    }//end init
+
+    /// constructor for DIGEST-MD5
+    /// - parameters:
+    ///   - authname: the name of SASL_CB_AUTHNAME, the username to authenticate, without any symbols or suffix, usually a lowercased short name "someone"
+    ///   - user: the name of SASL_CB_USER, the username to use for proxy authorization, usually with a prefix of "dn=" with binddn: "DN:CN=Someone,CN=User,CN=domain,CN=com"
+    ///   - password: the password of login
+    ///   - realm: the name of SASL_CB_GETREALM, the realm for the authentication attempt
+    public init(authname: String = "", user: String = "", password: String = "", realm: String = "") {
+      self.binddn = ""
+      self.authname = authname
+      self.user = user
+      self.password = password
+      self.realm = realm
+      self.mechanism = .DIGEST
+    }//end init
+
+    /// constructor for GSSAPI / GSS-SPNEGO
+    public init(mechanism: AuthType) {
+      self.mechanism = mechanism
+    }//end init
+
+    deinit {
+      for garbage in trashcan {
+        if garbage == nil {
+          continue
+        }//end if
+        ber_memfree(garbage)
+      }//next
+      trashcan.removeAll()
+    }//end
+  }//end Login
 
   /// Error Handling
   public enum Exception: Error {
@@ -143,75 +212,16 @@ public class LDAP {
     }//end str
   }//end string
 
-  private var _supportedControl = [String]()
-  private var _supportedExtension = [String]()
-  private var _supportedSASLMechanisms = [String]()
-  private var _saslMech: [AuthType:String] = [:]
-
-  public var supportedControl: [String] { get { return _supportedControl } }
-  public var supportedExtension: [String] { get { return _supportedExtension } }
-  public var supportedSASLMechanisms: [String] { get { return _supportedSASLMechanisms } }
-  public var supportedSASL: [AuthType:String] { get { return _saslMech } }
-
-  public func withUnsafeSASLDefaultsPointer<R>(mech: String = "", realm: String = "", authcid: String = "", passwd: String = "", authzid: String = "",_ body: (UnsafeMutableRawPointer?) throws -> R) rethrows -> R {
-    var def = lutilSASLdefaults(mech: nil, realm: nil, authcid: nil, passwd: nil, authzid: nil, resps: nil, nresps: 0)
-    if mech.isEmpty {
-      let _ = ldap_get_option(self.ldap, LDAP_OPT_X_SASL_MECH, &(def.mech))
-    } else {
-      def.mech = ber_strdup(mech)
-    }//end if
-    if realm.isEmpty {
-      let _ = ldap_get_option(self.ldap, LDAP_OPT_X_SASL_REALM, &(def.realm))
-    } else {
-      def.realm = ber_strdup(realm)
-    }//end if
-    if authcid.isEmpty {
-      let _ = ldap_get_option(self.ldap, LDAP_OPT_X_SASL_AUTHCID, &(def.authcid))
-    } else {
-      def.authcid = ber_strdup(authcid)
-    }//end if
-    if authzid.isEmpty {
-      let _ = ldap_get_option(self.ldap, LDAP_OPT_X_SASL_AUTHZID, &(def.authzid))
-    } else {
-      def.authzid = ber_strdup(authzid)
-    }//end if
-    if !passwd.isEmpty {
-      def.passwd = ber_strdup(passwd)
-    }//end if
-
-    let r = try body(UnsafeMutablePointer(mutating: &def))
-
-    if def.mech != nil {
-      ber_memfree(def.mech)
-    }//end if
-    if def.realm != nil {
-      ber_memfree(def.realm)
-    }//end if
-    if def.authcid != nil {
-      ber_memfree(def.authcid)
-    }//end if
-    if def.authzid != nil {
-      ber_memfree(def.authzid)
-    }//end if
-    if def.passwd != nil {
-      ber_memfree(def.passwd)
-    }//end if
-
-    return r
-  }
-
   /// constructor of LDAP. could be a simple LDAP() to local server or LDAP(url) with / without logon options.
   /// if login parameters were input, the process would block until finished.
   /// so it is strongly recommanded that call LDAP() without login option and call ldap.login() {} in async mode
   /// - parameters:
-  ///   - url: String, something like ldap://somedomain.com:port
-  ///   - username: String, user name to login, optional.
-  ///   - password: String, password for login, optional.
-  ///   - auth: AuthType, such as SIMPLE, GSSAPI, SPNEGO or DIGEST MD5
+  ///   - url: String, something like ldap://somedomain.com:port or ldaps://somedomain.com
+  ///   - login: login data.
   ///   - codePage: object server coding page, e.g., GB2312, BIG5 or JS
   /// - throws:
   ///   possible exceptions of initial failed or access denied
-  public init(url:String = "ldap://localhost", username: String? = nil, password: String? = nil, realm: String? = nil, auth: AuthType = .SIMPLE, codePage: Iconv.CodePage = .UTF8) throws {
+  public init(url:String = "ldaps://localhost", loginData: Login? = nil, codePage: Iconv.CodePage = .UTF8) throws {
 
     if codePage != .UTF8 {
       // we need a pair of code pages to transit in both directions.
@@ -220,104 +230,120 @@ public class LDAP {
     }//end if
 
     ldap = OpaquePointer(bitPattern: 0)
-    let r = ldap_initialize(&ldap, url)
+    var r = ldap_initialize(&ldap, url)
+
     guard r == 0 else {
       throw Exception.message(LDAP.error(r))
     }//end guard
 
-    guard let dse = try search() else {
-      throw Exception.message("ROOT DSE FAULT")
-    }//end dse
+    var proto = LDAP_VERSION3
 
-    guard let root = dse.dictionary[""] else {
-      throw Exception.message("ROOT DSE HAS NO EXPECTED KEY")
-    }//end root
-
-    _supportedControl = root["supportedControl"] as? [String] ?? []
-    _supportedExtension = root["supportedExtension"] as? [String] ?? []
-    _supportedSASLMechanisms = root["supportedSASLMechanisms"] as? [String] ?? []
-
-    _supportedSASLMechanisms.forEach { mech in
-      if strstr(mech, "GSSAPI") != nil {
-        _saslMech[AuthType.GSSAPI] = mech
-      }else if strstr(mech, "GSS-SPNEGO") != nil {
-        _saslMech[AuthType.SPNEGO] = mech
-      }//end if
-    }//next
+    r = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &proto)
 
     // if no login required, skip.
-    if username == nil || password == nil {
+    if loginData == nil {
       return
     }//end if
 
     // call login internally
-    try login(username: username ?? "", password: password ?? "", realm: realm ?? "", auth: auth)
+    try login(info: loginData)
   }//end init
-
-
 
   /// login in synchronized mode, will block the calling thread
   /// - parameters:
-  ///   - username: String, user name to login, optional.
-  ///   - password: String, password for login, optional.
-  ///   - auth: AuthType, such as SIMPLE, GSSAPI, SPNEGO or DIGEST MD5
-  /// - returns:
-  ///   true for a successful login.
+  ///   - info: login data
+  /// - throws:
+  ///   Exception message
   @discardableResult
-  public func login(username: String, password: String, realm: String = "", auth: AuthType = .SIMPLE) throws {
+  public func login(info: Login?) throws {
+
+    // load login data
+    guard let inf = info else {
+      throw Exception.message("LOGIN DATA NOT AVAILABLE")
+    }//end guard
+
+    // prepare return value
     var r = Int32(0)
-    let ex = Exception.message("UNSUPPORTED SECURITY MECH")
-    switch auth {
+
+    // prepare an empty credential structure
+    var cred = berval(bv_len: 0, bv_val: UnsafeMutablePointer<Int8>(bitPattern: 0))
+
+    // different mechanisms will take different authentication process
+    switch inf.mechanism {
+
+    // simple authorization doesn't mean unsafe - ldaps:// will encode the data
     case .SIMPLE:
-      var cred = berval(bv_len: ber_len_t(password.utf8.count), bv_val: ber_strdup(password))
-      r = ldap_sasl_bind_s(self.ldap, username, nil, &cred, nil, nil, nil)
+      // simple auth just use password and binddn to login
+      cred.bv_val = strdup(inf.password)
+      cred.bv_len = strlen(cred.bv_val)
+      r = ldap_sasl_bind_s(self.ldap, inf.binddn, nil, &cred, nil, nil, nil)
       ber_memfree(cred.bv_val)
-    case .GSSAPI, .SPNEGO:
-      guard let mech = _saslMech[auth] else {
-        throw ex
-      }//end
-      r = self.withUnsafeSASLDefaultsPointer(mech: mech, realm: realm, authcid: username, passwd: password) { ldap_sasl_interactive_bind_s(ldap, username, _saslMech[.GSSAPI], nil, nil, LDAP_SASL_AUTOMATIC, { ldapHandle, flags, defaults, input in
 
-        guard flags != LDAP_SASL_QUIET else {
-          return LDAP_OTHER
-        }//END GUARD
+    // GSSAPI / SPNEGO use kerberos kinit to login, so there is nothing to fill
+    case .GSSAPI:
+      r = ldap_sasl_bind_s(self.ldap, "", "GSSAPI", &cred, nil, nil, nil)
+    case .SPNEGO:
+      r = ldap_sasl_bind_s(self.ldap, "", "GSS-SPNEGO", &cred, nil, nil, nil)
 
-        let defaultsPointer = unsafeBitCast(defaults, to: UnsafeMutablePointer<lutilSASLdefaults>.self)
-        let def = defaultsPointer.pointee
+    // MD5 using interactive binding.
+    case .DIGEST:
 
-        guard let pInput = input else {
-          return -1
-        }//end guard
+      // turn the login info data into a pointer by this one.
+      var pinf = inf
 
-        var cursor: UnsafeMutablePointer<sasl_interact_t> = unsafeBitCast(pInput, to: UnsafeMutablePointer<sasl_interact_t>.self)
+      // call the binding
+      r = ldap_sasl_interactive_bind_s(self.ldap, inf.binddn, "DIGEST-MD5", nil, nil, LDAP_SASL_QUIET, { ld, flags, pRawDefaults, pRawInteract -> Int32 in
 
-        var interact = cursor.pointee
+        // in this callback, convert the pointer of pointers back to defaults
+        let pDef = unsafeBitCast(pRawDefaults, to: UnsafeMutablePointer<Login>.self)
+        let pInt = unsafeBitCast(pRawInteract, to: UnsafeMutablePointer<sasl_interact_t>.self)
+        let def = pDef.pointee
+        var pcursor:UnsafeMutablePointer<sasl_interact_t>? = nil
+        var interact: sasl_interact_t
+        pcursor = pInt
 
-        while(Int32(interact.id) != SASL_CB_LIST_END) {
+        // loop & answer the question asked by server
+        while(pcursor != nil) {
+          interact = (pcursor?.pointee)!
 
+          // prepare a blank pointer
+          var dflt = ""
           switch(Int32(interact.id)) {
-          case SASL_CB_GETREALM:
-            SASLReply(pInteract: cursor, pDefaults: defaultsPointer, pMsg: def.realm)
           case SASL_CB_AUTHNAME:
-            SASLReply(pInteract: cursor, pDefaults: defaultsPointer, pMsg: def.authcid)
-          case SASL_CB_PASS:
-            SASLReply(pInteract: cursor, pDefaults: defaultsPointer, pMsg: def.passwd)
+            dflt = def.authname
           case SASL_CB_USER:
-            SASLReply(pInteract: cursor, pDefaults: defaultsPointer, pMsg: def.authzid)
-          case SASL_CB_NOECHOPROMPT, SASL_CB_ECHOPROMPT: // skipped
-            ()
-          default: //unknown
-            return -1
+            dflt = def.user
+          case SASL_CB_PASS:
+            dflt = def.password
+          case SASL_CB_GETREALM:
+            dflt = def.realm
+          case SASL_CB_LIST_END:
+            return 0
+          case SASL_CB_NOECHOPROMPT, SASL_CB_ECHOPROMPT:
+            dflt = ""
+          default:
+            return 0
           }//end case
-          cursor.pointee = interact
-          cursor = cursor.successor()
-          interact = cursor.pointee
-        }//end while
 
-        return Int32(0)}, $0) }
+          // once
+          if dflt.isEmpty {
+            let str = strdup(dflt)
+            interact.result = unsafeBitCast(str, to: UnsafeRawPointer.self)
+            interact.len = UInt32(dflt.utf8.count)
+            def.drop(garbage: str)
+          }else{
+            interact.len = 0
+          }//end if
+          pcursor?.pointee = interact
+          pcursor = pcursor?.successor()
+        }//end while
+        return 0
+      }, unsafeBitCast(UnsafeMutablePointer(mutating: &pinf), to: UnsafeMutableRawPointer.self))
+
     default:
-      throw ex
+      throw Exception.message("UNSUPPORTED SECURITY MECH")
     }
+
     if r == 0 {
       return
     }else {
@@ -327,18 +353,16 @@ public class LDAP {
 
   /// Login in asynchronized mode. Once completed, it would invoke the callback handler
   /// - parameters:
-  ///   - username: String, user name to login, optional.
-  ///   - password: String, password for login, optional.
-  ///   - auth: AuthType, such as SIMPLE, GSSAPI, SPNEGO or DIGEST MD5
+  ///   - info: login data
   ///   - completion: callback handler with a boolean parameter indicating whether login succeeded or not.
-  public func login(username: String, password: String, realm: String = "", auth: AuthType = .SIMPLE, completion: @escaping (String?)->Void) {
+  public func login(info: Login, completion: @escaping (String?)->Void) {
     Threading.dispatch {
       do {
-        try self.login(username: username, password: password, realm: realm, auth: auth)
+        try self.login(info: info)
         completion(nil)
       }catch(let err) {
         completion("LOGIN FAILED: \(err)")
-      }
+      }//end do
     }//end thread
   }//end login
 
@@ -349,7 +373,7 @@ public class LDAP {
 
 
   /// Attribute of a searching result
-  public struct Attribute {
+  internal struct Attribute {
 
     /// name of the attribute
     internal var _name = ""
@@ -387,7 +411,7 @@ public class LDAP {
   }//end Attribute
 
   /// Attributes Set of a Searching result
-  public struct AttributeSet {
+  internal struct AttributeSet {
 
     /// name of the attribute
     internal var _name = ""
@@ -423,7 +447,7 @@ public class LDAP {
   }//end class
 
   /// a reference record of an LDAP search result
-  public struct Reference {
+  internal struct Reference {
 
     /// value set in an array of string
     internal var _values = [String] ()
@@ -457,7 +481,7 @@ public class LDAP {
   }//end struct
 
   /// LDAP Result record
-  public struct Result {
+  internal struct Result {
 
     /// error code of result
     internal var _errCode = Int32(0)
@@ -518,7 +542,7 @@ public class LDAP {
     }//end Result
   }
   /// Result set of a searching query
-  public struct ResultSet {
+  internal struct ResultSet {
 
     /// attribute set as an array
     internal var _attr = [AttributeSet]()
@@ -607,7 +631,8 @@ public class LDAP {
   /// - throws:
   ///   Exception.message
   @discardableResult
-  public func search(base:String = "", filter:String = "(objectclass=*)", scope:Scope = .BASE, attributes: [String] = [], sortedBy: String = "") throws -> ResultSet? {
+  public func search(base:String = "", filter:String = "(objectclass=*)", scope:Scope = .BASE, attributes: [String] = [], sortedBy: String = "") throws -> [String:[
+  String:Any]] {
 
     var serverControl = UnsafeMutablePointer<LDAPControl>(bitPattern: 0)
 
@@ -652,7 +677,7 @@ public class LDAP {
     // release the memory
     ldap_msgfree(msg)
 
-    return rs
+    return rs.dictionary
   }//end search
 
   /// asynchronized search
@@ -663,13 +688,13 @@ public class LDAP {
   ///   - sortedBy: a sorting string, may be generated by LDAP.sortingString()
   ///   - completion: callback with a parameter of ResultSet, nil if failed
   @discardableResult
-  public func search(base:String = "", filter:String = "(objectclass=*)", scope:Scope = .BASE, sortedBy: String = "", completion: @escaping (ResultSet?)-> Void) {
+  public func search(base:String = "", filter:String = "(objectclass=*)", scope:Scope = .BASE, sortedBy: String = "", completion: @escaping ([String:[String:Any]])-> Void) {
     Threading.dispatch {
-      var rs: ResultSet? = nil
+      var rs: [String:[String:Any]] = [:]
       do {
         rs = try self.search(base: base, filter: filter, scope: scope, sortedBy: sortedBy)
       }catch {
-        rs = nil
+        rs = [:]
       }//end catch
       completion(rs)
     }//end threading
