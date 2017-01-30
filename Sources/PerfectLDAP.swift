@@ -203,7 +203,7 @@ public class LDAP {
   public func string(str: String) -> berval {
     guard let i = iconvR else {
       return str.withCString { ptr -> berval in
-        return berval(bv_len: ber_len_t(str.utf8.count), bv_val: strdup(ptr))
+        return berval(bv_len: ber_len_t(str.utf8.count), bv_val: ber_strdup(ptr))
       }//end str
     }//end str
     return str.withCString { ptr -> berval in
@@ -274,7 +274,7 @@ public class LDAP {
     // simple authorization doesn't mean unsafe - ldaps:// will encode the data
     case .SIMPLE:
       // simple auth just use password and binddn to login
-      cred.bv_val = strdup(inf.password)
+      cred.bv_val = ber_strdup(inf.password)
       cred.bv_len = strlen(cred.bv_val)
       r = ldap_sasl_bind_s(self.ldap, inf.binddn, nil, &cred, nil, nil, nil)
       ber_memfree(cred.bv_val)
@@ -327,7 +327,7 @@ public class LDAP {
 
           // once
           if dflt.isEmpty {
-            let str = strdup(dflt)
+            let str = ber_strdup(dflt)
             interact.result = unsafeBitCast(str, to: UnsafeRawPointer.self)
             interact.len = UInt32(dflt.utf8.count)
             def.drop(garbage: str)
@@ -638,9 +638,9 @@ public class LDAP {
 
     if !sortedBy.isEmpty {
       var sortKeyList = UnsafeMutablePointer<UnsafeMutablePointer<LDAPSortKey>?>(bitPattern: 0)
-      let sortString = strdup(sortedBy)
+      let sortString = ber_strdup(sortedBy)
       var r = ldap_create_sort_keylist(&sortKeyList, sortString)
-      free(sortString)
+      ber_memfree(sortString)
       if r != 0 {
         throw Exception.message(LDAP.error(r))
       }//end if
@@ -711,7 +711,7 @@ public class LDAP {
   internal func modAlloc(method: Int32, key: String, values: [String]) -> LDAPMod {
     let pValues = values.map { self.string(str: $0) }
     let pointers = pValues.asUnsafeNullTerminatedPointers()
-    return LDAPMod(mod_op: method, mod_type: strdup(key), mod_vals: mod_vals_u(modv_bvals: pointers))
+    return LDAPMod(mod_op: method, mod_type: ber_strdup(key), mod_vals: mod_vals_u(modv_bvals: pointers))
   }//end modAlloc
 
   /// add an attribute to a DN

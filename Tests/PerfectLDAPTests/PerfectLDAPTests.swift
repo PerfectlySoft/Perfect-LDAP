@@ -91,9 +91,9 @@ class PerfectLDAPTests: XCTestCase {
     do {
       let ldap = try LDAP(url: testURL, loginData:cred, codePage: testCPG)
       print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-      let sort = LDAP.sortingString(sortedBy: [("displayName", .DSC), ("initials", .ASC)])
+      let sort = LDAP.sortingString(sortedBy: [("description", .ASC)])
       print(sort)
-      let res = try ldap.search(base:testBAS,scope:.SUBTREE, attributes: ["displayName", "initials"], sortedBy: sort)
+      let res = try ldap.search(base:testBAS,scope:.SUBTREE, attributes: ["displayName", "description"], sortedBy: sort)
       print(res)
     }catch(let err) {
       XCTFail("server control: \(err)")

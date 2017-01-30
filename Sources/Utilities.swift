@@ -71,13 +71,13 @@ public func withCArrayOfString<R>(array: [String] = [], _ body: (UnsafeMutablePo
   attr.append(nil)
 
   // duplicate again and turn it into an array of pointers
-  var parr = attr.map { $0 == nil ? nil : strdup($0!) }
+  var parr = attr.map { $0 == nil ? nil : ber_strdup($0!) }
 
   // perform the operation
   let r = try parr.withUnsafeMutableBufferPointer { try body ($0.baseAddress) }
 
   // release allocated string pointers.
-  for p in parr { free(UnsafeMutablePointer(mutating: p)) }
+  for p in parr { ber_memfree(UnsafeMutablePointer(mutating: p)) }
 
   return r
 }//end withCArrayOfString
