@@ -109,8 +109,8 @@ class PerfectLDAPTests: XCTestCase {
       print("=======================================================")
       print(rs)
       print("=======================================================")
-      let mod = expectation(description: "search")
-      ldap.modify(distinguishedName: testBDN, attributes: ["mail":["emai1@perfect.com", "email2@perfect.com"], "otherMailbox":["email3@perfect.org"]]) { err in
+      let mod = expectation(description: "modify")
+      ldap.modify(distinguishedName: testBDN, attributes: ["codePage":["437"]]) { err in
         mod.fulfill()
         XCTAssertNil(err)
       }//end add
@@ -126,6 +126,7 @@ class PerfectLDAPTests: XCTestCase {
     }
 
   }
+
 
   static var allTests : [(String, (PerfectLDAPTests) -> () throws -> Void)] {
     return [
