@@ -49,7 +49,7 @@ public class LDAP {
     case DIGEST
     /// OTHER
     case OTHER
-  }//end 
+  }//end
 
 
   /// Login Data
@@ -150,7 +150,7 @@ public class LDAP {
     }//end set
   }//end timetout
 
-  /// Searching result memory size limitations, for example, 1000 for 1000 lines?
+  /// the maximum number of entries that can be returned on a search operation
   public var limitation: Int {
     get {
       var limit = 0
@@ -159,13 +159,13 @@ public class LDAP {
     }//end get
     set {
       var limit = limitation
-      let _ = ldap_set_option(ldap, LDAP_OPT_TIMEOUT, &limit)
+      let _ = ldap_set_option(ldap, LDAP_OPT_SIZELIMIT, &limit)
     }//end set
   }//end limitation
 
   /// LDAP handler pointer
   internal var ldap: OpaquePointer? = nil
-  
+
   /// codepage convertor
   internal var iconv: Iconv? = nil
 
@@ -506,7 +506,7 @@ public class LDAP {
 
     /// referrals as an array of string, read only
     public var referrals: [String] { get { return _ref } }
-    
+
     /// constructor of Result
     /// - parameters:
     ///   - ldap: the LDAP handler
@@ -621,7 +621,7 @@ public class LDAP {
   }//end sortingString
 
   /// synchronized search
-  /// - parameters: 
+  /// - parameters:
   ///   - base: String, search base domain (dn), default = ""
   ///   - filter: String, the filter of query, default = "(objectclass=*)", means all possible results
   ///   - scope: See Scope, BASE, SINGLE_LEVEL, SUBTREE or CHILDREN
@@ -821,7 +821,7 @@ public class LDAP {
         // otherwise callback an error
         completion("\(err)")
       }//end do
-      
+
     }//end dispatch
   }//end func
 
@@ -868,19 +868,3 @@ public class LDAP {
     }//end dispatch
   }
 }//end class
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
