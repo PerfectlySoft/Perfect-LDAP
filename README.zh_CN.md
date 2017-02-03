@@ -147,23 +147,7 @@ let credential = LDAP.login(user: "judy", mechanism: .GSSAPI)
 // 将登录信息配置为DIGEST-MD5
 let credential = LDAP.Login(authname: "judy", user: "DN:CN=judy,CN=Users,DC=perfect,DC=com", password: "0penLDAP", realm: "PERFECT.COM", mechanism: .DIGEST)
 ```
-
 *⚠️注意⚠️* 参数 `authname` 等价于 `SASL_CB_AUTHNAME`，而 `user` 对应 `SASL_CB_USER`名称。如果您的程序不需要其中的某些参数，只要将该参数设置为空（“”）即可忽略。
-
-### GSSAPI 和 GSS-SPNEGO （⚠️试验性性质⚠️)
-
-如果您希望程序中使用 GSSAPI / GSS-SPNEGO 认证方式，请调用`LDAP.login(mechanism: AuthType)` 构造函数，参考如下：
-
-``` swift
-// 设置登录方式为 GSSAPI
-let credential = LDAP.login(mechanism: .GSSAPI)
-```
-或者
-
-``` swift
-// 设置登录方式为 GSS-SPNEGO
-let credential = LDAP.login(mechanism: .SPNEGO)
-```
 
 ## 检索
 
