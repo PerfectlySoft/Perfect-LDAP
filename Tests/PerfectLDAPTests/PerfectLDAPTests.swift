@@ -30,20 +30,16 @@ class PerfectLDAPTests: XCTestCase {
   let testBAS = "CN=Users,DC=perfect,DC=com"
   let testCPG: Iconv.CodePage = .UTF8
 
-  func testLoginFail() {
-    let cred = LDAP.Login(mechanism: .GSSAPI)
-    do {
-      let logfail = expectation(description: "logfail")
-      let ldap = try LDAP(url: testURL)
-      ldap.login(info: cred) { err in
-        XCTAssertNotNil(err)
-        logfail.fulfill()
-        print("log failed passed")
-      }//end log
+  let testGSSAPI_URL = "ldap://ipa.demo1.freeipa.org"
+  let testGSSAPI_BAS = "DC=demo1,DC=freeipa,DC=org"
+  let testGSSAPI_USR = "employee"
 
-      waitForExpectations(timeout: 10) { error in
-        XCTAssertNil(error)
-      }//end wait
+  func testLoginGSSAPI() {
+    let cred = LDAP.Login(user: testGSSAPI_USR, mechanism: .GSSAPI)
+    do {
+      let ldap = try LDAP(url: testGSSAPI_URL, loginData: cred)
+      let res = try ldap.search(base: testGSSAPI_BAS, scope:.SUBTREE)
+      print(res)
     }catch(let err) {
       XCTFail("testLogin error: \(err)")
     }
@@ -130,7 +126,7 @@ class PerfectLDAPTests: XCTestCase {
 
   static var allTests : [(String, (PerfectLDAPTests) -> () throws -> Void)] {
     return [
-      ("testLoginFail", testLoginFail),
+      ("testLoginGSSAPI", testLoginGSSAPI),
       ("testLoginPass", testLoginPass),
       ("testSearch", testSearch),
       ("testAttributeMod", testAttributeMod),

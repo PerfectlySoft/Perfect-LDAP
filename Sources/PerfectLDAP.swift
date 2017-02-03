@@ -38,17 +38,17 @@ public class LDAP {
   }//end
 
   /// Authentication Model
-  public enum AuthType {
+  public enum AuthType:String {
     /// username@domain & password
-    case SIMPLE
+    case SIMPLE = ""
     /// GSS-API
-    case GSSAPI
+    case GSSAPI = "GSSAPI"
     /// GSS-SPNEGO
-    case SPNEGO
+    case SPNEGO = "GSS-SPNEGO"
     /// DIGEST MD5
-    case DIGEST
+    case DIGEST = "DIGEST-MD5"
     /// OTHER
-    case OTHER
+    case OTHER = "UNSUPPORTED"
   }//end
 
 
@@ -90,23 +90,19 @@ public class LDAP {
       self.mechanism = .SIMPLE
     }//end init
 
-    /// constructor for DIGEST-MD5
+    /// constructor for SASL
     /// - parameters:
     ///   - authname: the name of SASL_CB_AUTHNAME, the username to authenticate, without any symbols or suffix, usually a lowercased short name "someone"
     ///   - user: the name of SASL_CB_USER, the username to use for proxy authorization, usually with a prefix of "dn=" with binddn: "DN:CN=Someone,CN=User,CN=domain,CN=com"
     ///   - password: the password of login
     ///   - realm: the name of SASL_CB_GETREALM, the realm for the authentication attempt
-    public init(authname: String = "", user: String = "", password: String = "", realm: String = "") {
+    ///   - mechanism: the SASL mechanism
+    public init(authname: String = "", user: String = "", password: String = "", realm: String = "", mechanism: AuthType = .GSSAPI) {
       self.binddn = ""
       self.authname = authname
       self.user = user
       self.password = password
       self.realm = realm
-      self.mechanism = .DIGEST
-    }//end init
-
-    /// constructor for GSSAPI / GSS-SPNEGO
-    public init(mechanism: AuthType) {
       self.mechanism = mechanism
     }//end init
 
@@ -268,81 +264,74 @@ public class LDAP {
     // prepare an empty credential structure
     var cred = berval(bv_len: 0, bv_val: UnsafeMutablePointer<Int8>(bitPattern: 0))
 
-    // different mechanisms will take different authentication process
-    switch inf.mechanism {
+    if inf.mechanism == .OTHER {
+      throw Exception.message("UNSUPPORTED MECHANISMS")
+    }//end if
 
-    // simple authorization doesn't mean unsafe - ldaps:// will encode the data
-    case .SIMPLE:
+    if inf.mechanism == .SIMPLE {
       // simple auth just use password and binddn to login
       cred.bv_val = ber_strdup(inf.password)
       cred.bv_len = strlen(cred.bv_val)
       r = ldap_sasl_bind_s(self.ldap, inf.binddn, nil, &cred, nil, nil, nil)
       ber_memfree(cred.bv_val)
+      if r == 0 {
+        return
+      }else {
+        throw Exception.message(LDAP.error(r))
+      }//end
+    }//end if
 
-    // GSSAPI / SPNEGO use kerberos kinit to login, so there is nothing to fill
-    case .GSSAPI:
-      r = ldap_sasl_bind_s(self.ldap, "", "GSSAPI", &cred, nil, nil, nil)
-    case .SPNEGO:
-      r = ldap_sasl_bind_s(self.ldap, "", "GSS-SPNEGO", &cred, nil, nil, nil)
+    // turn the login info data into a pointer by this one.
+    var pinf = inf
 
-    // MD5 using interactive binding.
-    case .DIGEST:
+    // call the binding
+    r = ldap_sasl_interactive_bind_s(self.ldap, inf.binddn, inf.mechanism.rawValue, nil, nil, LDAP_SASL_QUIET, { ld, flags, pRawDefaults, pRawInteract -> Int32 in
 
-      // turn the login info data into a pointer by this one.
-      var pinf = inf
+      // in this callback, convert the pointer of pointers back to defaults
+      let pDef = unsafeBitCast(pRawDefaults, to: UnsafeMutablePointer<Login>.self)
+      let pInt = unsafeBitCast(pRawInteract, to: UnsafeMutablePointer<sasl_interact_t>.self)
+      let def = pDef.pointee
+      var pcursor:UnsafeMutablePointer<sasl_interact_t>? = nil
+      var interact: sasl_interact_t
+      pcursor = pInt
 
-      // call the binding
-      r = ldap_sasl_interactive_bind_s(self.ldap, inf.binddn, "DIGEST-MD5", nil, nil, LDAP_SASL_QUIET, { ld, flags, pRawDefaults, pRawInteract -> Int32 in
+      // loop & answer the question asked by server
+      while(pcursor != nil) {
+        interact = (pcursor?.pointee)!
 
-        // in this callback, convert the pointer of pointers back to defaults
-        let pDef = unsafeBitCast(pRawDefaults, to: UnsafeMutablePointer<Login>.self)
-        let pInt = unsafeBitCast(pRawInteract, to: UnsafeMutablePointer<sasl_interact_t>.self)
-        let def = pDef.pointee
-        var pcursor:UnsafeMutablePointer<sasl_interact_t>? = nil
-        var interact: sasl_interact_t
-        pcursor = pInt
+        // prepare a blank pointer
+        var dflt = ""
+        switch(Int32(interact.id)) {
+        case SASL_CB_AUTHNAME:
+          dflt = def.authname
+        case SASL_CB_USER:
+          dflt = def.user
+        case SASL_CB_PASS:
+          dflt = def.password
+        case SASL_CB_GETREALM:
+          dflt = def.realm
+        case SASL_CB_LIST_END:
+          return 0
+        case SASL_CB_NOECHOPROMPT, SASL_CB_ECHOPROMPT:
+          dflt = ""
+        default:
+          return 0
+        }//end case
 
-        // loop & answer the question asked by server
-        while(pcursor != nil) {
-          interact = (pcursor?.pointee)!
-
-          // prepare a blank pointer
-          var dflt = ""
-          switch(Int32(interact.id)) {
-          case SASL_CB_AUTHNAME:
-            dflt = def.authname
-          case SASL_CB_USER:
-            dflt = def.user
-          case SASL_CB_PASS:
-            dflt = def.password
-          case SASL_CB_GETREALM:
-            dflt = def.realm
-          case SASL_CB_LIST_END:
-            return 0
-          case SASL_CB_NOECHOPROMPT, SASL_CB_ECHOPROMPT:
-            dflt = ""
-          default:
-            return 0
-          }//end case
-
-          // once
-          if dflt.isEmpty {
-            let str = ber_strdup(dflt)
-            interact.result = unsafeBitCast(str, to: UnsafeRawPointer.self)
-            interact.len = UInt32(dflt.utf8.count)
-            def.drop(garbage: str)
-          }else{
-            interact.len = 0
-          }//end if
-          pcursor?.pointee = interact
-          pcursor = pcursor?.successor()
-        }//end while
-        return 0
-      }, unsafeBitCast(UnsafeMutablePointer(mutating: &pinf), to: UnsafeMutableRawPointer.self))
-
-    default:
-      throw Exception.message("UNSUPPORTED SECURITY MECH")
-    }
+        // once
+        if !dflt.isEmpty {
+          let str = ber_strdup(dflt)
+          interact.result = unsafeBitCast(str, to: UnsafeRawPointer.self)
+          interact.len = UInt32(dflt.utf8.count)
+          def.drop(garbage: str)
+        }else{
+          interact.len = 0
+        }//end if
+        pcursor?.pointee = interact
+        pcursor = pcursor?.successor()
+      }//end while
+      return 0
+    }, unsafeBitCast(UnsafeMutablePointer(mutating: &pinf), to: UnsafeMutableRawPointer.self))
 
     if r == 0 {
       return
