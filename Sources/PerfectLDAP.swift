@@ -141,7 +141,7 @@ public class LDAP {
       return t.tv_sec
     }//end get
     set {
-      var t = timeval(tv_sec: timeout, tv_usec: 0)
+      var t = timeval(tv_sec: newValue, tv_usec: 0)
       let _ = ldap_set_option(ldap, LDAP_OPT_TIMEOUT, &t)
     }//end set
   }//end timetout
@@ -154,7 +154,7 @@ public class LDAP {
       return limit
     }//end get
     set {
-      var limit = limitation
+      var limit = newValue
       let _ = ldap_set_option(ldap, LDAP_OPT_SIZELIMIT, &limit)
     }//end set
   }//end limitation
