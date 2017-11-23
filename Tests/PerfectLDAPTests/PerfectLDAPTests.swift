@@ -20,16 +20,22 @@ import OpenLDAP
  * mac: /etc/openldap/ldap.conf / linux: /etc/ldap/ldap.conf
  * MUST ADD: `TLS_REQCERT allow`
  */
+/*
+ Note for using docker as the testing server
+ $ docker pull dinkel/openldap
+ $ docker run -d -p 389:389 -e SLAPD_PASSWORD=password -e SLAPD_DOMAIN=example.com dinkel/openldap
+ when finishing, try docker ps & kill
+ */
 class PerfectLDAPTests: XCTestCase {
-  let testURL = "ldap://ldap.forumsys.com"
-  let testBDN = "cn=read-only-admin,dc=example,dc=com"
+  let testURL = "ldap://localhost"
+  let testBDN = "cn=admin,dc=example,dc=com"
   let testPWD = "password"
-  let testBAS = "ou=mathematicians,dc=example,dc=com"
+  let testBAS = "cn=admin,dc=example,dc=com"
   let testCPG: Iconv.CodePage = .UTF8
 
-  let testGSSAPI_URL = "ldap://ldap.forumsys.com"
-  let testGSSAPI_BAS = "ou=mathematicians,dc=example,dc=com"
-  let testGSSAPI_USR = "gauss"
+  let testGSSAPI_URL = "ldap://localhost"
+  let testGSSAPI_BAS = "cn=admin,dc=example,dc=com"
+  let testGSSAPI_USR = "admin"
 
   let debug = true
 
@@ -117,10 +123,9 @@ class PerfectLDAPTests: XCTestCase {
       print(rs)
       print("=======================================================")
       let mod = expectation(description: "modify")
-      ldap.modify(distinguishedName: testBDN, attributes: ["sn":["Write on Read Only Admin"]]) { err in
+      ldap.modify(distinguishedName: testBDN, attributes: ["description":["My New Title"]]) { err in
         mod.fulfill()
-        XCTAssertNotNil(err)
-        debugPrint("Shall see this error", err ?? "should be read only")
+        XCTAssertNil(err)
       }//end add
       self.waitForExpectations(timeout: 10){ error in
         XCTAssertNil(error)
