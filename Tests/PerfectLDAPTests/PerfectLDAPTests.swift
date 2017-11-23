@@ -46,6 +46,7 @@ class PerfectLDAPTests: XCTestCase {
       ("testSearch", testSearch),
       ("testAttributeMod", testAttributeMod),
       //("testServerSort", testServerSort), // Server Sort is a very bad idea!
+      ("testUserAndGroupManagement", testUserAndGroupManagement)
     ]
   }
 
@@ -79,6 +80,39 @@ class PerfectLDAPTests: XCTestCase {
       XCTFail("testLogin error: \(err)")
     }
   }//end testLogin
+
+  func testUserAndGroupManagement() {
+    let cred = LDAP.Login(binddn: testBDN, password: testPWD)
+    do {
+      let ldap = try LDAP(url: testURL, loginData:cred, codePage: testCPG)
+
+      let man = expectation(description: "groupAdd")
+      let groupName = "cn=snoozers,dc=example,dc=com"
+      ldap.add(distinguishedName: groupName,
+                   attributes: ["objectClass":["top", "posixGroup"],
+                                "gidNumber":["123"]] ) {
+        res in
+        XCTAssertNil(res)
+        man.fulfill()
+      }//end search
+
+      waitForExpectations(timeout: 10) { error in
+        XCTAssertNil(error)
+      }
+
+      let deman = expectation(description: "groupRemove")
+      ldap.delete(distinguishedName: groupName) {
+        res in
+        XCTAssertNil(res)
+        deman.fulfill()
+      }//end search
+      waitForExpectations(timeout: 10) { error in
+        XCTAssertNil(error)
+      }
+    }catch(let err) {
+      XCTFail("error: \(err)")
+    }
+  }
 
   func testSearch () {
     let cred = LDAP.Login(binddn: testBDN, password: testPWD)
