@@ -54,7 +54,9 @@ extension Array {
     }//end map
 
     let pointers = UnsafeMutablePointer<UnsafeMutablePointer<Element>?>.allocate(capacity: self.count + 1)
-    pointers.initialize(from: pArray)
+    for i in 0 ..< self.count {
+      pointers.advanced(by: i).pointee = pArray[i]
+    }
     pointers.advanced(by: self.count).pointee = nil
     return pointers
   }//func
