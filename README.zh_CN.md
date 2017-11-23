@@ -23,7 +23,7 @@
 
 <p align="center">
     <a href="https://developer.apple.com/swift/" target="_blank">
-        <img src="https://img.shields.io/badge/Swift-3.0-orange.svg?style=flat" alt="Swift 3.0">
+        <img src="https://img.shields.io/badge/Swift-4.0-orange.svg?style=flat" alt="Swift 4.0">
     </a>
     <a href="https://developer.apple.com/swift/" target="_blank">
         <img src="https://img.shields.io/badge/Platforms-OS%20X%20%7C%20Linux%20-lightgray.svg?style=flat" alt="Platforms OS X | Linux">
@@ -47,7 +47,7 @@
 
 该软件使用SPM进行编译和测试，本软件也是[Perfect](https://github.com/PerfectlySoft/Perfect)项目的一部分。
 
-请确保您已经安装并激活了最新版本的 Swift 3.0 tool chain 工具链。
+请确保您已经安装并激活了最新版本的 Swift 4.0 tool chain 工具链。
 
 *注意*: 由于LDAP在很多操作系统上都存在不同的服务器实现，因此本文中凡是标明了 (⚠️试验性质⚠️) 的方法，都以为着可能并不适用于某种场合。但是作为开源软件函数库，您可以随时根据需要修改源代码以达到目标要求。
 
@@ -56,7 +56,11 @@
 首先请在您的项目 Package.swift 文件中增加依存关系：
 
 ``` swift
-.Package(url: "https://github.com/PerfectlySoft/Perfect-LDAP.git", majorVersion: 1)
+.package(url: "https://github.com/PerfectlySoft/Perfect-LDAP.git", 
+from: "3.0.0")
+
+// 在目标段需要注明
+depedencies: ["PerfectLDAP"]
 ```
 
 然后在源代码中导入 PerfectLDAP 函数库：

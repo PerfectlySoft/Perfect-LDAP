@@ -23,7 +23,7 @@
 
 <p align="center">
     <a href="https://developer.apple.com/swift/" target="_blank">
-        <img src="https://img.shields.io/badge/Swift-3.0-orange.svg?style=flat" alt="Swift 3.0">
+        <img src="https://img.shields.io/badge/Swift-4.0-orange.svg?style=flat" alt="Swift 4.0">
     </a>
     <a href="https://developer.apple.com/swift/" target="_blank">
         <img src="https://img.shields.io/badge/Platforms-OS%20X%20%7C%20Linux%20-lightgray.svg?style=flat" alt="Platforms OS X | Linux">
@@ -43,7 +43,7 @@ This project provides an express OpenLDAP class wrapper which enable access to O
 
 This package builds with Swift Package Manager and is part of the [Perfect](https://github.com/PerfectlySoft/Perfect) project.
 
-Ensure you have installed and activated the latest Swift 3.0 tool chain.
+Ensure you have installed and activated the latest Swift 4.0 tool chain.
 
 *Caution*: for the reason that LDAP is widely using in many different operating systems with variable implementations, API marked with (⚠️EXPERIMENTAL⚠️) indicates that this method might not be fully applicable to certain context. However, as an open source software library, you may modify the source code to meet a specific requirement.
 
@@ -52,14 +52,22 @@ Ensure you have installed and activated the latest Swift 3.0 tool chain.
 Add the following dependency to your project's Package.swift file:
 
 ``` swift
-.Package(url: "https://github.com/PerfectlySoft/Perfect-LDAP.git", majorVersion: 1)
+.package(url: "https://github.com/PerfectlySoft/Perfect-LDAP.git", 
+from: "3.0.0")
+
+// in the target section:
+depedencies: ["PerfectLDAP"]
 ```
 
 Then import PerfectLDAP to your source code:
 
+
 ``` swift
+
 import PerfectLDAP
+
 ```
+
 
 ## Connect to LDAP Server
 
