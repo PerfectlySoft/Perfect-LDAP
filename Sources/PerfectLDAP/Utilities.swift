@@ -47,15 +47,11 @@ extension Array {
   /// - return:
   ///   a pointer array with each pointer is pointing the corresponding element, ending with a null pointer.
   public func asUnsafeNullTerminatedPointers() -> UnsafeMutablePointer<UnsafeMutablePointer<Element>?> {
-    let pArray = self.map { value -> UnsafeMutablePointer<Element>? in
-      let p = UnsafeMutablePointer<Element>.allocate(capacity: 1)
-      p.initialize(to: value)
-      return p
-    }//end map
-
     let pointers = UnsafeMutablePointer<UnsafeMutablePointer<Element>?>.allocate(capacity: self.count + 1)
     for i in 0 ..< self.count {
-      pointers.advanced(by: i).pointee = pArray[i]
+      let p =  UnsafeMutablePointer<Element>.allocate(capacity: 1)
+      p.initialize(to: self[i])
+      pointers.advanced(by: i).pointee = p
     }
     pointers.advanced(by: self.count).pointee = nil
     return pointers
