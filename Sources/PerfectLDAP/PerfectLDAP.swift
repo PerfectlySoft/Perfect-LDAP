@@ -762,7 +762,7 @@ public class LDAP {
     }//end asyncSearch
     
 
-  /// asynchronized search
+  /// synchronized search but in seporated Thread
   /// - parameters:
   ///   - base: String, search base domain (dn), default = ""
   ///   - filter: String, the filter of query, default = "(objectclass=*)", means all possible results
