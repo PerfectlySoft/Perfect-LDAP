@@ -701,11 +701,11 @@ public class LDAP {
         }//end if
         
         // prepare the return set
-        var msg = OpaquePointer(bitPattern: 0)
         var msgid : Int32 = 0
-        var t = timeval(tv_sec: 10, tv_usec: 10)
         
         let r = withCArrayOfString(array: attributes) { pAttribute -> Int32 in
+            
+            var t = timeval(tv_sec: 10, tv_usec: 10)
             
             // perform the search
             let result = ldap_search_ext(self.ldap, base, scope.rawValue, filter, pAttribute, 0, &serverControl, nil, &t, 0, &msgid)
@@ -738,14 +738,13 @@ public class LDAP {
                 break;
             };
             
-            // determines result type
-            msgtype = UInt(ldap_msgtype(res))
-            if (msgtype != LDAP_RES_SEARCH_ENTRY) {
-                continue
-            } else {
-                print("bingo")
+            if let m = res {
+                // determines result type
+                msgtype = UInt(ldap_msgtype(m))
                 
-                if let m = res {
+                if (msgtype != LDAP_RES_SEARCH_ENTRY) {
+                    ldap_msgfree(m)
+                } else {
                     // process the result set
                     let rs = ResultSet(ldap: self, chain: m)
                     
@@ -754,7 +753,6 @@ public class LDAP {
                     
                     return rs.dictionary
                 }
-                break
             }
         }
         
