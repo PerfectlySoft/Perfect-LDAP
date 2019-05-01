@@ -35,7 +35,7 @@ extension Iconv {
       return ""
     }//end guard
     let str = String(validatingUTF8: p)
-    p.deallocate(capacity: Int(from.bv_len) * 2)
+    p.deallocate()
     return str ?? ""
   }//end convert
 }
