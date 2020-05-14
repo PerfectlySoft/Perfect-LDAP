@@ -800,7 +800,7 @@ public class LDAP {
     threading.async {
       do {
         // perform adding
-        try self.modify(distinguishedName: distinguishedName, attributes: attributes, method)
+        try self.modify(distinguishedName: distinguishedName, attributes: attributes, method: method)
 
         // if nothing wrong, callback
         completion(nil)
