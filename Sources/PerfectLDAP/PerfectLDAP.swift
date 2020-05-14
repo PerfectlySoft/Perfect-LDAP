@@ -757,16 +757,20 @@ public class LDAP {
   /// - parameters:
   ///   - distinguishedName: specific DN
   ///   - attributes: attributes as an dictionary to modify
+  ///   - method: specify if an attribute should be added, removed or replaced (default)
+  ///       add:     LDAP_MOD_ADD | LDAP_MOD_BVALUES
+  ///       remove:  LDAP_MOD_DELETE | LDAP_MOD_BVALUES
+  ///       replace: LDAP_MOD_REPLACE | LDAP_MOD_BVALUES
   /// - throws:
   ///   - Exception with message, such as no permission, or object class violation, etc.
-  
-  public func modify(distinguishedName: String, attributes: [String:[String]]) throws {
+
+  public func modify(distinguishedName: String, attributes: [String:[String]], method: Int32 = LDAP_MOD_REPLACE | LDAP_MOD_BVALUES) throws {
 
     // map the keys to an array
     let keys:[String] = attributes.keys.map { $0 }
 
     // map the key array to a modification array
-    let mods:[LDAPMod] = keys.map { self.modAlloc(method: LDAP_MOD_REPLACE | LDAP_MOD_BVALUES, key: $0, values: attributes[$0]!)}
+    let mods:[LDAPMod] = keys.map { self.modAlloc(method: method, key: $0, values: attributes[$0]!)}
 
     // get the pointers
     let pMods = mods.asUnsafeNullTerminatedPointers()
@@ -787,12 +791,16 @@ public class LDAP {
   ///   - distinguishedName: specific DN
   ///   - attributes: attributes as an dictionary to modify
   ///   - completion: callback once done. If something wrong, an error message will pass to the closure.
+  ///   - method: specify if an attribute should be added, removed or replaced (default)
+  ///       add:     LDAP_MOD_ADD | LDAP_MOD_BVALUES
+  ///       remove:  LDAP_MOD_DELETE | LDAP_MOD_BVALUES
+  ///       replace: LDAP_MOD_REPLACE | LDAP_MOD_BVALUES
   
-  public func modify(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void) {
+  public func modify(distinguishedName: String, attributes: [String:[String]],completion: @escaping (String?)-> Void, method: Int32 = LDAP_MOD_REPLACE | LDAP_MOD_BVALUES) {
     threading.async {
       do {
         // perform adding
-        try self.modify(distinguishedName: distinguishedName, attributes: attributes)
+        try self.modify(distinguishedName: distinguishedName, attributes: attributes, method)
 
         // if nothing wrong, callback
         completion(nil)

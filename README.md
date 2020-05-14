@@ -237,11 +237,15 @@ connection.add(distinguishedName: "CN=judy,CN=User,DC=perfect,DC=com", attribute
 Function `LDAP.modify()` can modify attributes from a specific DN with parameters below:
 - distinguishedName: String, specific DN
 - attributes:[String:[String]], attributes as an dictionary to modify. In this dictionary, every attribute, as a unique key in the dictionary, could have a series of values as an array.
+- method: specify if an attribute should be added, removed or replaced (default)
+  - add: LDAP_MOD_ADD | LDAP_MOD_BVALUES
+  - remove: LDAP_MOD_DELETE | LDAP_MOD_BVALUES
+  - replace: LDAP_MOD_REPLACE | LDAP_MOD_BVALUES
 
 Both asynchronous modify() and synchronous modify() share the same parameters above, take example:
 
 ``` swift
-// try an modify() synchronously.
+// try and modify() synchronously.
 do {
   try connection.modify(distinguishedName: "CN=judy,CN=User,DC=perfect,DC=com", attributes: ["codePage":["437"]])
 }catch (let err) {
@@ -251,6 +255,24 @@ do {
 // try and modify() asynchronously:
 connection.modify(distinguishedName: "CN=judy,CN=User,DC=perfect,DC=com", attributes:["codePage":["437"]]) { err in
   // if nothing wrong, err will be nil
+}
+```
+
+Example: Add and remove user from group
+
+``` swift
+// add user to group
+do {
+  try connection.modify(distinguishedName: "CN=employee_group,CN=Group,DC=perfect,DC=com", attributes: ["member":["CN=judy,CN=User,DC=perfect,DC=com"]], method: LDAP_MOD_ADD | LDAP_MOD_BVALUES)
+}catch (let err) {
+    // failed for some reason
+}
+
+// remove user from group
+do {
+  try connection.modify(distinguishedName: "CN=employee_group,CN=Group,DC=perfect,DC=com", attributes: ["member":["CN=judy,CN=User,DC=perfect,DC=com"]], method: LDAP_MOD_DELETE | LDAP_MOD_BVALUES)
+}catch (let err) {
+    // failed for some reason
 }
 ```
 
